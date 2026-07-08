@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>우리반 수학 학습지</title>
+<style>
+  :root{
+    --paper:#FAF7F2;
+    --paper-line:#E7E0D0;
+    --ink:#2B2B2B;
+    --muted:#8A8577;
+    --teal:#1F6F6F;
+    --teal-dark:#154F4F;
+    --teal-tint:#E4F0EE;
+    --coral:#E8703A;
+    --coral-dark:#C85A29;
+    --success:#3E8E5A;
+    --success-tint:#E7F3EA;
+    --danger:#C8493B;
+    --white:#FFFFFF;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+  .screen{display:none;flex:1;min-height:0;flex-direction:column;}
+  .screen.active{display:flex;}
+
+  /* ---------- 공통 헤더(공책 표지 느낌의 상단 띠) ---------- */
+  .topbar{
+    background:var(--teal);
+    color:#fff;
+    padding:14px 16px;
+    display:flex;align-items:center;gap:10px;
+    flex:0 0 auto;
+    position:relative;
+  }
+  .topbar::after{
+    content:"";
+    position:absolute;left:0;right:0;bottom:-6px;height:6px;
+    background-image:radial-gradient(circle,var(--paper) 3px,transparent 3.5px);
+    background-size:16px 12px;background-position:8px 0;
+  }
+  .topbar .title{font-size:17px;font-weight:700;letter-spacing:.2px;flex:1;}
+  .topbar button.icon-btn{
+    background:rgba(255,255,255,.16);border:none;color:#fff;
+    padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;
+    cursor:pointer;
+  }
+  .topbar button.icon-btn:active{background:rgba(255,255,255,.3);}
+
+  /* ---------- 시작 화면 ---------- */
+  #screen-start{align-items:center;justify-content:center;padding:24px;}
+  .brand{text-align:center;margin-bottom:36px;}
+  .brand .pencil{font-size:44px;}
+  .brand h1{font-size:26px;margin:8px 0 4px;color:var(--teal-dark);}
+  .brand p{margin:0;color:var(--muted);font-size:14px;}
+  .role-cards{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;}
+  .role-card{
+    width:180px;min-height:180px;
+    background:#fff;border:2px solid var(--paper-line);border-radius:20px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    cursor:pointer;padding:16px;transition:transform .12s, border-color .12s;
+  }
+  .role-card:active{transform:scale(.96);}
+  .role-card .emoji{font-size:40px;}
+  .role-card .label{font-size:17px;font-weight:700;color:var(--ink);}
+  .role-card.teacher{border-color:var(--teal);}
+  .role-card.student{border-color:var(--coral);}
+
+  /* ---------- 공통 카드/버튼 ---------- */
+  .panel{padding:18px;overflow-y:auto;flex:1;min-height:0;}
+  .card{background:#fff;border:1px solid var(--paper-line);border-radius:16px;padding:18px;margin-bottom:16px;}
+  .card h3{margin:0 0 12px;font-size:15px;color:var(--teal-dark);}
+  .field-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+  label.small{font-size:13px;color:var(--muted);font-weight:600;}
+  input[type=date], input[type=text], input[type=password], textarea{
+    font-family:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--paper-line);
+    border-radius:10px;background:#fff;color:var(--ink);
+  }
+  textarea{width:100%;resize:vertical;min-height:140px;line-height:1.7;}
+  .btn{
+    font-family:inherit;font-weight:700;font-size:15px;border:none;border-radius:12px;
+    padding:12px 18px;cursor:pointer;color:#fff;background:var(--teal);
+  }
+  .btn:active{filter:brightness(.9);}
+  .btn.coral{background:var(--coral);}
+  .btn.ghost{background:transparent;color:var(--teal);border:1.5px solid var(--teal);}
+  .btn.danger{background:var(--danger);}
+  .btn:disabled{background:#cfcabc;cursor:not-allowed;}
+  .btn.block{width:100%;}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.5;}
+  .status-msg{font-size:13.5px;padding:10px 12px;border-radius:10px;margin-top:10px;display:none;}
+  .status-msg.show{display:block;}
+  .status-msg.ok{background:var(--success-tint);color:var(--success);}
+  .status-msg.err{background:#FBEAE7;color:var(--danger);}
+
+  /* ---------- 선생님 PIN ---------- */
+  #screen-pin{align-items:center;justify-content:center;padding:24px;}
+  .pin-box{background:#fff;border-radius:20px;padding:28px;width:280px;text-align:center;border:1px solid var(--paper-line);}
+  .pin-box input{width:100%;text-align:center;font-size:22px;letter-spacing:6px;margin:14px 0;}
+
+  /* ---------- 탭 ---------- */
+  .tabs{display:flex;gap:6px;padding:10px 16px 0;flex:0 0 auto;background:var(--paper);}
+  .tab-btn{
+    flex:1;padding:10px 8px;border:none;background:#EFE9DA;color:var(--muted);
+    border-radius:10px 10px 0 0;font-weight:700;font-size:13.5px;cursor:pointer;
+  }
+  .tab-btn.active{background:#fff;color:var(--teal-dark);}
+  .tab-content{display:none;flex:1;min-height:0;}
+  .tab-content.active{display:flex;flex-direction:column;}
+
+  /* 업로드 미리보기 */
+  .thumb-list{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+  .thumb{
+    width:84px;height:110px;border-radius:8px;overflow:hidden;position:relative;
+    border:1.5px solid var(--paper-line);background:#f2f0e8;
+  }
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb .rm{
+    position:absolute;top:2px;right:2px;background:rgba(0,0,0,.55);color:#fff;
+    border:none;border-radius:50%;width:20px;height:20px;font-size:12px;line-height:20px;
+    text-align:center;padding:0;cursor:pointer;
+  }
+  .thumb .pg{position:absolute;bottom:2px;left:4px;color:#fff;font-size:10px;background:rgba(0,0,0,.5);
+    padding:1px 5px;border-radius:6px;}
+
+  /* 결과 확인 표 */
+  .result-grid{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+  .result-row{
+    display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--paper-line);
+    border-radius:12px;padding:10px 12px;
+  }
+  .result-row .name{width:88px;font-weight:700;font-size:14px;flex:0 0 auto;}
+  .result-row .pages{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
+  .mini-thumb{
+    width:42px;height:56px;border-radius:6px;overflow:hidden;border:1.5px solid var(--paper-line);
+    cursor:pointer;background:#f2f0e8;
+  }
+  .mini-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .mini-thumb.empty{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px;cursor:default;}
+  .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;flex:0 0 auto;}
+  .badge.done{background:var(--success-tint);color:var(--success);}
+  .badge.pending{background:#F0EBDC;color:var(--muted);}
+
+  /* ---------- 학생 이름 선택 ---------- */
+  #screen-student-select .panel{align-items:stretch;}
+  .name-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;}
+  .name-btn{
+    background:#fff;border:2px solid var(--paper-line);border-radius:14px;padding:16px 8px;
+    font-size:15px;font-weight:700;cursor:pointer;color:var(--ink);
+  }
+  .name-btn.selected{border-color:var(--coral);background:#FFF3EC;color:var(--coral-dark);}
+
+  /* ---------- 학습지 풀이 화면 ---------- */
+  #screen-worksheet{background:#EDE7D8;}
+  .ws-header{
+    flex:0 0 auto;background:var(--teal-dark);color:#fff;
+    padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13.5px;
+  }
+  .ws-header .who{font-weight:700;font-size:14.5px;}
+  .ws-header .pageind{margin-left:auto;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:20px;}
+  .board-wrap{
+    flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+    padding:10px;overflow:auto;
+    background-image:linear-gradient(var(--paper-line) 1px,transparent 1px),linear-gradient(90deg,var(--paper-line) 1px,transparent 1px);
+    background-size:26px 26px;background-color:#F3EFE2;
+  }
+  .board{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.12);border-radius:4px;}
+  .board img{display:block;user-select:none;pointer-events:none;}
+  .board canvas{position:absolute;top:0;left:0;touch-action:none;cursor:crosshair;}
+  .toolbar{
+    flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 12px;
+    background:#fff;border-top:1px solid var(--paper-line);flex-wrap:wrap;
+  }
+  .swatch{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0;}
+  .swatch.active{border-color:var(--teal);}
+  .tool-btn{
+    background:#F0EBDC;border:none;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:700;
+    color:var(--ink);cursor:pointer;
+  }
+  .tool-btn.on{background:var(--teal);color:#fff;}
+  .toolbar .spacer{flex:1;}
+  .toolbar select{font-family:inherit;font-size:13px;padding:8px 10px;border-radius:10px;border:1.5px solid var(--paper-line);}
+  .submit-banner{
+    flex:0 0 auto;text-align:center;font-size:13px;padding:6px;color:var(--muted);background:#fff;
+  }
+  .submit-banner.done{color:var(--success);font-weight:700;}
+
+  /* ---------- 모달(확대보기) ---------- */
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px;
+  }
+  .modal-bg.show{display:flex;}
+  .modal-box{background:#fff;border-radius:14px;max-width:92vw;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;}
+  .modal-box .mhead{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--teal-dark);color:#fff;}
+  .modal-box .mhead .spacer{flex:1;}
+  .modal-box img{max-width:88vw;max-height:74vh;object-fit:contain;display:block;background:#EDE7D8;}
+  .modal-box .mfoot{display:flex;gap:10px;padding:10px 14px;justify-content:center;background:#fff;}
+
+  .loading{padding:16px;text-align:center;color:var(--muted);font-size:14px;}
+  .empty-note{padding:20px;text-align:center;color:var(--muted);font-size:14px;line-height:1.7;}
+
+
+  .boot-overlay{position:fixed;inset:0;background:var(--paper);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);font-size:14px;text-align:center;padding:24px;}
+  .boot-overlay.hide{display:none;}
+  .spinner{width:34px;height:34px;border:4px solid var(--paper-line);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#D8D2C0;border-radius:8px;}
+</style>
+</head>
+<body>
+<div class="boot-overlay" id="bootOverlay">
+  <div class="spinner"></div>
+  <div>서버에 연결하는 중...</div>
+</div>
+<div id="app">
+
+  <!-- ===================== 시작 화면 ===================== -->
+  <div class="screen active" id="screen-start">
+    <div class="panel" style="display:flex;align-items:center;justify-content:center;flex-direction:column;">
+      <div class="brand">
+        <div class="pencil">✏️📐</div>
+        <h1>우리반 수학 학습지</h1>
+        <p>디벗으로 바로 풀고 제출하는 학습지</p>
+      </div>
+      <div class="role-cards">
+        <button class="role-card teacher" onclick="goPin()">
+          <div class="emoji">🍎</div>
+          <div class="label">선생님</div>
+        </button>
+        <button class="role-card student" onclick="goStudentSelect()">
+          <div class="emoji">🧑‍🎓</div>
+          <div class="label">학생</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 선생님 PIN ===================== -->
+  <div class="screen" id="screen-pin">
+    <div class="topbar"><button class="icon-btn" onclick="goStart()">← 처음</button><div class="title">선생님 확인</div></div>
+    <div class="panel" style="display:flex;align-items:center;justify-content:center;">
+      <div class="pin-box">
+        <div style="font-size:14px;color:var(--muted);">선생님 PIN을 입력하세요</div>
+        <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••">
+        <button class="btn coral block" onclick="checkPin()">확인</button>
+        <div class="status-msg err" id="pinError">PIN이 올바르지 않아요.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 선생님 화면 ===================== -->
+  <div class="screen" id="screen-teacher">
+    <div class="topbar"><button class="icon-btn" onclick="goStart()">← 처음</button><div class="title">선생님 모드</div></div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="upload" onclick="switchTeacherTab('upload')">📤 학습지 업로드</button>
+      <button class="tab-btn" data-tab="results" onclick="switchTeacherTab('results')">📊 제출 확인</button>
+      <button class="tab-btn" data-tab="roster" onclick="switchTeacherTab('roster')">👥 학생 명단</button>
+    </div>
+
+    <!-- 업로드 탭 -->
+    <div class="tab-content active" id="tab-upload">
+      <div class="panel">
+        <div class="card">
+          <h3>날짜 선택</h3>
+          <div class="field-row">
+            <input type="date" id="uploadDate">
+            <button class="btn ghost" onclick="loadExistingWorksheet()">불러오기</button>
+          </div>
+          <div class="hint" id="uploadExistingNote"></div>
+        </div>
+        <div class="card">
+          <h3>학습지 이미지 (여러 장 가능, 순서대로 등록돼요)</h3>
+          <input type="file" id="fileInput" accept="image/*" multiple>
+          <div class="thumb-list" id="thumbList"></div>
+          <button class="btn coral block" style="margin-top:14px;" onclick="saveWorksheet()">이 학습지로 저장</button>
+          <div class="status-msg" id="uploadStatus"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 결과확인 탭 -->
+    <div class="tab-content" id="tab-results">
+      <div class="panel">
+        <div class="card">
+          <h3>날짜 선택</h3>
+          <div class="field-row">
+            <input type="date" id="resultDate">
+            <button class="btn ghost" onclick="loadResults()">불러오기</button>
+          </div>
+        </div>
+        <div id="resultArea"></div>
+      </div>
+    </div>
+
+    <!-- 학생명단 탭 -->
+    <div class="tab-content" id="tab-roster">
+      <div class="panel">
+        <div class="card">
+          <h3>학생 이름을 한 줄에 한 명씩 입력하세요</h3>
+          <textarea id="rosterInput" placeholder="예)&#10;김민준&#10;이서연&#10;박도윤"></textarea>
+          <button class="btn coral block" style="margin-top:12px;" onclick="saveRoster()">명단 저장</button>
+          <div class="status-msg" id="rosterStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 학생 이름 선택 ===================== -->
+  <div class="screen" id="screen-student-select">
+    <div class="topbar"><button class="icon-btn" onclick="goStart()">← 처음</button><div class="title">누구인가요?</div></div>
+    <div class="panel">
+      <div id="nameGridWrap" class="loading">명단을 불러오는 중...</div>
+      <button class="btn coral block" style="margin-top:16px;" id="studentGoBtn" disabled onclick="enterWorksheet()">학습지 풀러 가기</button>
+    </div>
+  </div>
+
+  <!-- ===================== 학습지 풀이 화면 ===================== -->
+  <div class="screen" id="screen-worksheet">
+    <div class="ws-header">
+      <button class="icon-btn" style="background:rgba(255,255,255,.16);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12.5px;" onclick="goStudentSelect()">← 나가기</button>
+      <div class="who" id="wsWho"></div>
+      <div class="pageind" id="wsPageInd"></div>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board">
+        <img id="pageImage" src="" alt="학습지">
+        <canvas id="drawCanvas"></canvas>
+      </div>
+    </div>
+    <div class="submit-banner" id="submitBanner">아직 제출 전이에요</div>
+    <div class="toolbar">
+      <button class="swatch active" style="background:#1a1a1a" onclick="setColor('#1a1a1a',this)"></button>
+      <button class="swatch" style="background:#e63946" onclick="setColor('#e63946',this)"></button>
+      <button class="swatch" style="background:#1d63d1" onclick="setColor('#1d63d1',this)"></button>
+      <button class="swatch" style="background:#2e8b57" onclick="setColor('#2e8b57',this)"></button>
+      <select id="widthSelect" onchange="setWidth(this.value)">
+        <option value="3">얇게</option>
+        <option value="6" selected>보통</option>
+        <option value="11">굵게</option>
+      </select>
+      <button class="tool-btn" id="eraserBtn" onclick="toggleEraser()">🧹 지우개</button>
+      <button class="tool-btn" onclick="undoStroke()">↩️ 실행취소</button>
+      <button class="tool-btn" onclick="clearPage()">🗑️ 전체지우기</button>
+      <div class="spacer"></div>
+      <button class="tool-btn" id="prevPageBtn" onclick="changePage(-1)">◀ 이전</button>
+      <button class="tool-btn" id="nextPageBtn" onclick="changePage(1)">다음 ▶</button>
+      <button class="btn coral" onclick="submitWork()">✅ 제출하기</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- 확대보기 모달 -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal-box">
+    <div class="mhead">
+      <span id="modalTitle"></span>
+      <div class="spacer"></div>
+      <button class="icon-btn" onclick="closeModal()">닫기 ✕</button>
+    </div>
+    <img id="modalImg" src="">
+    <div class="mfoot">
+      <button class="tool-btn" id="modalPrev" onclick="modalNav(-1)">◀ 이전 장</button>
+      <button class="tool-btn" id="modalNext" onclick="modalNav(1)">다음 장 ▶</button>
+      <a class="btn coral" id="modalDownload" download="학습지.jpg">저장</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script>
+/* ============================================================
+   Firebase 설정 — 반드시 본인 Firebase 프로젝트 값으로 교체하세요!
+   (Firebase 콘솔 > 프로젝트 설정(톱니바퀴) > 일반 > 내 앱 > SDK 설정 및 구성 > 구성)
+   Firestore Database, Storage, Authentication(익명 로그인)을 미리 켜두어야 해요.
+============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCreq7Sizobb8qhKpA7K2AbSXdlrS-xK4U",
+  authDomain: "math-601.firebaseapp.com",
+  projectId: "math-601",
+  storageBucket: "math-601.firebasestorage.app",
+  messagingSenderId: "461279927927",
+  appId: "1:461279927927:web:08b167aa52b658e0c93072",
+  measurementId: "G-48SZ42R1XE"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const fbStorage = firebase.storage();
+
+const TEACHER_PIN = '2025';   // 선생님 PIN — 필요하면 이 값만 바꾸세요.
+const MAX_IMG_DIM = 2000;     // 업로드/저장 시 이미지 최대 가로/세로 픽셀 (글씨 선명도 우선)
+const JPEG_QUALITY = 0.88;    // 기본 화질
+const PAGE_TARGET_BYTES = 900000; // 페이지 1장당 목표 용량(약 900KB) — 넘으면 화질을 단계적으로 낮춤
+
+/* ============================================================
+   Firebase 인증 대기 / 부팅
+============================================================ */
+function waitForAuth(){
+  return new Promise((resolve, reject)=>{
+    if(auth.currentUser){ resolve(auth.currentUser); return; }
+    const unsub = auth.onAuthStateChanged(user=>{
+      if(user){ unsub(); resolve(user); }
+    }, reject);
+  });
+}
+async function bootApp(){
+  try{
+    await auth.signInAnonymously();
+    await waitForAuth();
+    document.getElementById('bootOverlay').classList.add('hide');
+  }catch(e){
+    console.error('Firebase 연결 실패', e);
+    document.getElementById('bootOverlay').innerHTML =
+      '<div class="spinner" style="display:none;"></div>'+
+      '<div>서버 연결에 실패했어요.<br>firebaseConfig 값과, Firebase 콘솔의 Authentication에서<br>"익명" 로그인이 켜져 있는지 확인해주세요.</div>';
+  }
+}
+
+/* ============================================================
+   유틸: 날짜, 키 정리, Firestore/Storage 래퍼
+============================================================ */
+function todayStr(){
+  return new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Seoul'});
+}
+function sanitizeKeyPart(s){
+  return String(s).trim().replace(/[\s/\\'".#$\[\]]+/g,'_');
+}
+async function fsGetDoc(col, id){
+  try{
+    const snap = await db.collection(col).doc(id).get();
+    return snap.exists ? snap.data() : null;
+  }catch(e){
+    console.error('불러오기 실패', col, id, e);
+    return null;
+  }
+}
+async function fsSetDoc(col, id, data){
+  try{
+    await db.collection(col).doc(id).set(data);
+    return true;
+  }catch(e){
+    console.error('저장 실패', col, id, e);
+    return false;
+  }
+}
+async function uploadDataUrl(path, dataUrl){
+  const blob = await (await fetch(dataUrl)).blob();
+  const ref = fbStorage.ref().child(path);
+  await ref.put(blob);
+  return await ref.getDownloadURL();
+}
+async function downloadAsBlobUrl(url){
+  const resp = await fetch(url);
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
+}
+
+/* ============================================================
+   화면 전환
+============================================================ */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goStart(){ showScreen('screen-start'); }
+function goPin(){
+  document.getElementById('pinInput').value='';
+  document.getElementById('pinError').classList.remove('show');
+  showScreen('screen-pin');
+}
+function checkPin(){
+  const v = document.getElementById('pinInput').value;
+  if(v === TEACHER_PIN){
+    showScreen('screen-teacher');
+    initTeacherScreen();
+  }else{
+    document.getElementById('pinError').classList.add('show');
+  }
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  bootApp();
+  document.getElementById('pinInput').addEventListener('keydown', e=>{
+    if(e.key==='Enter') checkPin();
+  });
+  document.getElementById('uploadDate').value = todayStr();
+  document.getElementById('resultDate').value = todayStr();
+  document.getElementById('fileInput').addEventListener('change', onFilesSelected);
+});
+
+/* ============================================================
+   선생님 - 탭 전환
+============================================================ */
+function switchTeacherTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+function initTeacherScreen(){
+  switchTeacherTab('upload');
+  pendingPages = [];
+  renderThumbs();
+  loadExistingWorksheet();
+  loadRosterIntoTextarea();
+}
+
+/* ============================================================
+   선생님 - 학습지 업로드
+============================================================ */
+let pendingPages = []; // dataURL(신규) 또는 이미 업로드된 다운로드 URL(기존) 배열
+
+function canvasToDataUrlAdaptive(canvas){
+  let q = JPEG_QUALITY;
+  let url = canvas.toDataURL('image/jpeg', q);
+  while((url.length * 0.75) > PAGE_TARGET_BYTES && q > 0.55){
+    q -= 0.08;
+    url = canvas.toDataURL('image/jpeg', q);
+  }
+  return url;
+}
+
+function resizeImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=>reject(new Error('파일을 읽지 못했어요'));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error('이미지를 열지 못했어요'));
+      img.onload = ()=>{
+        let w = img.naturalWidth, h = img.naturalHeight;
+        const scale = Math.min(1, MAX_IMG_DIM / Math.max(w,h));
+        w = Math.round(w*scale); h = Math.round(h*scale);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        resolve(canvasToDataUrlAdaptive(c));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onFilesSelected(e){
+  const files = Array.from(e.target.files || []);
+  if(files.length===0) return;
+  const statusEl = document.getElementById('uploadStatus');
+  statusEl.className = 'status-msg show';
+  statusEl.textContent = '이미지 처리 중...';
+  for(const f of files){
+    try{
+      const dataUrl = await resizeImageFile(f);
+      pendingPages.push(dataUrl);
+    }catch(err){
+      console.error(err);
+    }
+  }
+  renderThumbs();
+  statusEl.classList.remove('show');
+  e.target.value = '';
+}
+
+function renderThumbs(){
+  const wrap = document.getElementById('thumbList');
+  wrap.innerHTML = '';
+  pendingPages.forEach((src, i)=>{
+    const d = document.createElement('div');
+    d.className = 'thumb';
+    d.innerHTML = `<img src="${src}"><span class="pg">${i+1}</span><button class="rm" onclick="removePendingPage(${i})">✕</button>`;
+    wrap.appendChild(d);
+  });
+}
+function removePendingPage(i){
+  pendingPages.splice(i,1);
+  renderThumbs();
+}
+
+async function loadExistingWorksheet(){
+  const date = document.getElementById('uploadDate').value || todayStr();
+  const note = document.getElementById('uploadExistingNote');
+  note.textContent = '불러오는 중...';
+  const ws = await fsGetDoc('worksheets', date);
+  if(ws && ws.pageUrls && ws.pageUrls.length){
+    pendingPages = ws.pageUrls.slice();
+    note.textContent = `${date}에 이미 등록된 학습지 ${ws.pageUrls.length}장을 불러왔어요. 수정 후 다시 저장하면 덮어써요.`;
+  }else{
+    pendingPages = [];
+    note.textContent = `${date}에는 아직 등록된 학습지가 없어요. 새로 만들어보세요.`;
+  }
+  renderThumbs();
+}
+
+async function saveWorksheet(){
+  const date = document.getElementById('uploadDate').value || todayStr();
+  const statusEl = document.getElementById('uploadStatus');
+  if(pendingPages.length===0){
+    statusEl.className = 'status-msg show err';
+    statusEl.textContent = '이미지를 먼저 추가해주세요.';
+    return;
+  }
+  statusEl.className = 'status-msg show';
+  statusEl.textContent = `저장 중... (0/${pendingPages.length})`;
+  try{
+    const urls = [];
+    for(let i=0;i<pendingPages.length;i++){
+      const p = pendingPages[i];
+      if(p.startsWith('data:')){
+        const url = await uploadDataUrl(`worksheets/${date}/page${i}_${Date.now()}.jpg`, p);
+        urls.push(url);
+      }else{
+        urls.push(p);
+      }
+      statusEl.textContent = `저장 중... (${i+1}/${pendingPages.length})`;
+    }
+    const ok = await fsSetDoc('worksheets', date, {pageUrls:urls, pageCount:urls.length, updatedAt:new Date().toISOString()});
+    statusEl.className = 'status-msg show ' + (ok?'ok':'err');
+    statusEl.textContent = ok ? `저장 완료! ${date} 학습지 ${urls.length}장이 등록됐어요.` : '저장에 실패했어요. 다시 시도해주세요.';
+  }catch(err){
+    console.error(err);
+    statusEl.className = 'status-msg show err';
+    statusEl.textContent = '업로드 중 오류가 발생했어요. 인터넷 연결을 확인해주세요.';
+  }
+}
+
+/* ============================================================
+   선생님 - 학생 명단
+============================================================ */
+async function loadRosterIntoTextarea(){
+  const data = await fsGetDoc('roster','list');
+  document.getElementById('rosterInput').value = (data && data.names) ? data.names.join('\n') : '';
+}
+async function saveRoster(){
+  const raw = document.getElementById('rosterInput').value;
+  const names = raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  const statusEl = document.getElementById('rosterStatus');
+  statusEl.className = 'status-msg show';
+  statusEl.textContent = '저장 중...';
+  const ok = await fsSetDoc('roster','list', {names, updatedAt:new Date().toISOString()});
+  statusEl.className = 'status-msg show ' + (ok?'ok':'err');
+  statusEl.textContent = ok ? `저장 완료! 학생 ${names.length}명 등록됐어요.` : '저장에 실패했어요.';
+}
+
+/* ============================================================
+   선생님 - 제출 결과 확인
+============================================================ */
+async function loadResults(){
+  const date = document.getElementById('resultDate').value || todayStr();
+  const area = document.getElementById('resultArea');
+  area.innerHTML = '<div class="loading">불러오는 중...</div>';
+
+  const rosterData = await fsGetDoc('roster','list');
+  const roster = (rosterData && rosterData.names) || [];
+  if(roster.length===0){
+    area.innerHTML = '<div class="empty-note">등록된 학생 명단이 없어요. "학생 명단" 탭에서 먼저 등록해주세요.</div>';
+    return;
+  }
+  const ws = await fsGetDoc('worksheets', date);
+  const pageCount = ws && ws.pageUrls ? ws.pageUrls.length : 0;
+
+  const subs = {};
+  await Promise.all(roster.map(async name=>{
+    subs[name] = await fsGetDoc('submissions', date+'_'+sanitizeKeyPart(name));
+  }));
+
+  currentResultsDate = date;
+  currentResultsSubs = subs;
+
+  area.innerHTML = pageCount===0
+    ? `<div class="empty-note">${date}에 등록된 학습지가 없어요.<br>제출 여부만 아래에서 확인할 수 있어요.</div>`
+    : '';
+
+  const gridWrap = document.createElement('div');
+  gridWrap.className = 'result-grid';
+  roster.forEach(name=>{
+    const sub = subs[name];
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    const pagesHtml = [];
+    const total = pageCount || (sub && sub.pages ? Object.keys(sub.pages).length : 0);
+    for(let i=0;i<total;i++){
+      const src = sub && sub.pages && sub.pages[i];
+      if(src){
+        pagesHtml.push(`<div class="mini-thumb" onclick='openModalFromResults(${JSON.stringify(name)},${i})'><img src="${src}" loading="lazy"></div>`);
+      }else{
+        pagesHtml.push(`<div class="mini-thumb empty">–</div>`);
+      }
+    }
+    row.innerHTML = `
+      <div class="name">${name}</div>
+      <div class="pages">${pagesHtml.join('') || '<span class="hint">해당 없음</span>'}</div>
+      <div class="badge ${sub && sub.submitted ? 'done':'pending'}">${sub && sub.submitted ? '제출완료':'미제출'}</div>
+    `;
+    gridWrap.appendChild(row);
+  });
+  area.appendChild(gridWrap);
+}
+
+let currentResultsDate = null;
+let currentResultsSubs = null;
+let modalPages = [];
+let modalIndex = 0;
+
+function openModalFromResults(name, pageIndex){
+  const sub = currentResultsSubs[name];
+  if(!sub || !sub.pages) return;
+  const sortedKeys = Object.keys(sub.pages).sort((a,b)=>a-b);
+  modalPages = sortedKeys.map(k=>sub.pages[k]);
+  modalIndex = sortedKeys.indexOf(String(pageIndex));
+  document.getElementById('modalTitle').textContent = `${name} — ${currentResultsDate}`;
+  renderModal();
+  document.getElementById('modalBg').classList.add('show');
+}
+async function renderModal(){
+  const src = modalPages[modalIndex];
+  document.getElementById('modalImg').src = src;
+  document.getElementById('modalPrev').disabled = modalIndex<=0;
+  document.getElementById('modalNext').disabled = modalIndex>=modalPages.length-1;
+  const dl = document.getElementById('modalDownload');
+  dl.href = src; // 우선 원본 URL로 연결(즉시 열람 가능하게)
+  try{
+    const blobUrl = await downloadAsBlobUrl(src);
+    dl.href = blobUrl;
+  }catch(e){ /* 실패 시 원본 URL 유지 */ }
+}
+function modalNav(d){
+  modalIndex = Math.max(0, Math.min(modalPages.length-1, modalIndex+d));
+  renderModal();
+}
+function closeModal(){
+  document.getElementById('modalBg').classList.remove('show');
+}
+
+/* ============================================================
+   학생 - 이름 선택
+============================================================ */
+let selectedStudent = null;
+
+async function goStudentSelect(){
+  showScreen('screen-student-select');
+  selectedStudent = null;
+  document.getElementById('studentGoBtn').disabled = true;
+  const wrap = document.getElementById('nameGridWrap');
+  wrap.innerHTML = '<div class="loading">명단을 불러오는 중...</div>';
+  const data = await fsGetDoc('roster','list');
+  const roster = (data && data.names) || [];
+  if(roster.length===0){
+    wrap.innerHTML = '<div class="empty-note">선생님이 아직 학생 명단을 등록하지 않았어요.<br>선생님께 말씀드려주세요!</div>';
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'name-grid';
+  roster.forEach(name=>{
+    const b = document.createElement('button');
+    b.className = 'name-btn';
+    b.textContent = name;
+    b.onclick = ()=>{
+      selectedStudent = name;
+      document.querySelectorAll('.name-btn').forEach(x=>x.classList.remove('selected'));
+      b.classList.add('selected');
+      document.getElementById('studentGoBtn').disabled = false;
+    };
+    grid.appendChild(b);
+  });
+  wrap.innerHTML = '';
+  wrap.appendChild(grid);
+}
+
+/* ============================================================
+   학생 - 학습지 풀이
+============================================================ */
+let wsDate = null;
+let wsPages = [];           // 오늘 학습지 페이지 URL 목록
+let wsStrokes = [];         // 페이지별 stroke 배열
+let wsCurrentPage = 0;
+let submittedFlag = false;
+
+let drawColor = '#1a1a1a';
+let drawWidth = 6;
+let eraserOn = false;
+let isDrawing = false;
+let currentStroke = null;
+
+async function enterWorksheet(){
+  if(!selectedStudent) return;
+  wsDate = todayStr();
+  const ws = await fsGetDoc('worksheets', wsDate);
+  if(!ws || !ws.pageUrls || ws.pageUrls.length===0){
+    showScreen('screen-worksheet');
+    document.getElementById('wsWho').textContent = selectedStudent;
+    document.getElementById('board').innerHTML = '<div class="empty-note" style="padding:40px;">오늘(' + wsDate + ') 등록된 학습지가 아직 없어요.<br>선생님이 올려주실 때까지 기다려주세요!</div>';
+    document.querySelector('.toolbar').style.display = 'none';
+    document.getElementById('submitBanner').style.display = 'none';
+    document.getElementById('wsPageInd').textContent = '';
+    return;
+  }
+  document.querySelector('.toolbar').style.display = 'flex';
+  document.getElementById('submitBanner').style.display = 'block';
+  document.getElementById('board').innerHTML = '<img id="pageImage" src="" alt="학습지"><canvas id="drawCanvas"></canvas>';
+
+  wsPages = ws.pageUrls;
+  wsStrokes = wsPages.map(()=>[]);
+  wsCurrentPage = 0;
+  submittedFlag = false;
+
+  const existing = await fsGetDoc('submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent));
+  submittedFlag = !!(existing && existing.submitted);
+
+  document.getElementById('wsWho').textContent = selectedStudent;
+  showScreen('screen-worksheet');
+  loadPage(0);
+  updateSubmitBanner();
+}
+
+function loadPage(idx){
+  wsCurrentPage = idx;
+  const img = document.getElementById('pageImage');
+  const canvas = document.getElementById('drawCanvas');
+  img.onload = ()=>{
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    fitBoard();
+    redrawStrokes();
+    setupCanvasEvents(canvas);
+  };
+  img.src = wsPages[idx];
+  document.getElementById('wsPageInd').textContent = `${idx+1} / ${wsPages.length}`;
+  document.getElementById('prevPageBtn').disabled = idx<=0;
+  document.getElementById('nextPageBtn').disabled = idx>=wsPages.length-1;
+}
+
+function changePage(delta){
+  const next = wsCurrentPage + delta;
+  if(next<0 || next>=wsPages.length) return;
+  loadPage(next);
+}
+
+function setColor(c, btnEl){
+  drawColor = c; eraserOn = false;
+  document.getElementById('eraserBtn').classList.remove('on');
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+  btnEl.classList.add('active');
+}
+function setWidth(v){ drawWidth = parseFloat(v); }
+function toggleEraser(){
+  eraserOn = !eraserOn;
+  document.getElementById('eraserBtn').classList.toggle('on', eraserOn);
+}
+
+let canvasBound = null;
+function setupCanvasEvents(canvas){
+  if(canvasBound===canvas) return;
+  canvasBound = canvas;
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointerleave', onPointerUp);
+}
+
+function getCanvasPoint(canvas, evt){
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (evt.clientX - rect.left) * scaleX,
+    y: (evt.clientY - rect.top) * scaleY
+  };
+}
+
+function onPointerDown(e){
+  const canvas = e.target;
+  canvas.setPointerCapture(e.pointerId);
+  isDrawing = true;
+  const p = getCanvasPoint(canvas, e);
+  currentStroke = {
+    mode: eraserOn ? 'erase' : 'draw',
+    color: drawColor,
+    width: eraserOn ? drawWidth*3 : drawWidth,
+    points: [p]
+  };
+}
+function onPointerMove(e){
+  if(!isDrawing || !currentStroke) return;
+  const canvas = e.target;
+  const p = getCanvasPoint(canvas, e);
+  currentStroke.points.push(p);
+  drawSegment(canvas.getContext('2d'), currentStroke, currentStroke.points.length-2);
+}
+function onPointerUp(e){
+  if(!isDrawing) return;
+  isDrawing = false;
+  if(currentStroke && currentStroke.points.length>1){
+    wsStrokes[wsCurrentPage].push(currentStroke);
+  }
+  currentStroke = null;
+}
+
+function drawSegment(ctx, stroke, fromIdx){
+  if(fromIdx<0) fromIdx=0;
+  ctx.save();
+  ctx.globalCompositeOperation = stroke.mode==='erase' ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = stroke.color;
+  ctx.lineWidth = stroke.width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  const a = stroke.points[fromIdx];
+  ctx.moveTo(a.x, a.y);
+  for(let i=fromIdx+1;i<stroke.points.length;i++){
+    ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function redrawStrokes(){
+  const canvas = document.getElementById('drawCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const strokes = wsStrokes[wsCurrentPage] || [];
+  strokes.forEach(s=>drawSegment(ctx, s, 0));
+}
+
+function undoStroke(){
+  const strokes = wsStrokes[wsCurrentPage];
+  if(strokes.length===0) return;
+  strokes.pop();
+  redrawStrokes();
+}
+function clearPage(){
+  if(wsStrokes[wsCurrentPage].length===0) return;
+  if(!confirm('이 페이지에 그린 내용을 모두 지울까요?')) return;
+  wsStrokes[wsCurrentPage] = [];
+  redrawStrokes();
+}
+
+function updateSubmitBanner(){
+  const b = document.getElementById('submitBanner');
+  if(submittedFlag){
+    b.textContent = '✅ 제출 완료! (다시 풀고 다시 제출할 수도 있어요)';
+    b.classList.add('done');
+  }else{
+    b.textContent = '아직 제출 전이에요. 다 풀면 "제출하기"를 눌러주세요.';
+    b.classList.remove('done');
+  }
+}
+
+// board-wrap 안에서 이미지 비율을 유지하며 최대한 꽉 차게 표시하고,
+// 캔버스 크기를 이미지 표시 크기와 정확히 맞춘다 (position:absolute + %높이 이슈 회피)
+function fitBoard(){
+  const img = document.getElementById('pageImage');
+  const canvas = document.getElementById('drawCanvas');
+  const wrap = document.querySelector('.board-wrap');
+  if(!img || !canvas || !wrap || !img.naturalWidth) return;
+  const availW = Math.max(50, wrap.clientWidth - 20);
+  const availH = Math.max(50, wrap.clientHeight - 20);
+  const ratio = img.naturalWidth / img.naturalHeight;
+  let w = availW, h = w / ratio;
+  if(h > availH){ h = availH; w = h * ratio; }
+  img.style.width = w + 'px';
+  img.style.height = h + 'px';
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+}
+window.addEventListener('resize', ()=>{
+  if(document.getElementById('screen-worksheet').classList.contains('active')) fitBoard();
+});
+
+function flattenPage(idx){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img,0,0,c.width,c.height);
+      const strokes = wsStrokes[idx] || [];
+      strokes.forEach(s=>drawSegment(ctx, s, 0));
+      try{
+        resolve(canvasToDataUrlAdaptive(c));
+      }catch(err){
+        reject(err);
+      }
+    };
+    img.onerror = ()=>reject(new Error('학습지 이미지를 불러오지 못했어요'));
+    img.src = wsPages[idx];
+  });
+}
+
+async function submitWork(){
+  const banner = document.getElementById('submitBanner');
+  banner.textContent = '제출 처리 중...';
+  try{
+    const urlMap = {};
+    for(let i=0;i<wsPages.length;i++){
+      banner.textContent = `제출 처리 중... (${i+1}/${wsPages.length})`;
+      const flatDataUrl = await flattenPage(i);
+      const path = `submissions/${wsDate}/${sanitizeKeyPart(selectedStudent)}/page${i}_${Date.now()}.jpg`;
+      urlMap[i] = await uploadDataUrl(path, flatDataUrl);
+    }
+    const ok = await fsSetDoc(
+      'submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent),
+      {pages:urlMap, submitted:true, updatedAt:new Date().toISOString(), student:selectedStudent}
+    );
+    submittedFlag = ok;
+    updateSubmitBanner();
+    banner.textContent = ok
+      ? '🎉 제출 완료! 수고했어요, ' + selectedStudent + '!'
+      : '제출에 실패했어요. 다시 눌러주세요.';
+    banner.classList.toggle('done', ok);
+  }catch(err){
+    console.error(err);
+    banner.textContent = '제출 중 오류가 발생했어요. 인터넷 연결을 확인하고 다시 눌러주세요.';
+    banner.classList.remove('done');
+  }
+}
+</script>
+</body>
+</html>
