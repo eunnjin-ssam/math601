@@ -169,13 +169,19 @@
   .ws-header .pageind{margin-left:auto;background:rgba(255,255,255,.15);padding:4px 10px;border-radius:20px;}
   .board-wrap{
     flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
-    padding:10px;overflow:auto;
+    padding:10px;overflow:hidden;position:relative;
     background-image:linear-gradient(var(--paper-line) 1px,transparent 1px),linear-gradient(90deg,var(--paper-line) 1px,transparent 1px);
     background-size:26px 26px;background-color:#F3EFE2;
   }
-  .board{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.12);border-radius:4px;}
+  .board{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.12);border-radius:4px;transform-origin:0 0;}
   .board img{display:block;user-select:none;pointer-events:none;}
   .board canvas{position:absolute;top:0;left:0;touch-action:none;cursor:crosshair;}
+  .zoom-reset-btn{
+    position:absolute;top:12px;right:12px;z-index:5;display:none;align-items:center;gap:4px;
+    background:rgba(255,255,255,.94);border:1.5px solid var(--paper-line);border-radius:20px;
+    padding:8px 14px;font-size:13px;font-weight:700;color:var(--teal-dark);cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
   .toolbar{
     flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 12px;
     background:#fff;border-top:1px solid var(--paper-line);flex-wrap:wrap;
@@ -189,6 +195,9 @@
   .tool-btn.on{background:var(--teal);color:#fff;}
   .toolbar .spacer{flex:1;}
   .toolbar select{font-family:inherit;font-size:13px;padding:8px 10px;border-radius:10px;border:1.5px solid var(--paper-line);}
+  .width-control{display:flex;align-items:center;gap:9px;background:#F0EBDC;border-radius:10px;padding:0 12px;height:38px;}
+  .width-control input[type=range]{width:88px;accent-color:var(--teal);cursor:pointer;}
+  .width-dot{width:10px;height:10px;border-radius:50%;background:#1a1a1a;flex:0 0 auto;}
   .submit-banner{
     flex:0 0 auto;text-align:center;font-size:13px;padding:6px;color:var(--muted);background:#fff;
   }
@@ -336,6 +345,7 @@
       <div class="pageind" id="wsPageInd"></div>
     </div>
     <div class="board-wrap">
+      <button class="zoom-reset-btn" id="zoomResetBtn" onclick="resetZoom()">↺ 원래 크기</button>
       <div class="board" id="board">
         <img id="pageImage" src="" alt="학습지">
         <canvas id="drawCanvas"></canvas>
@@ -347,11 +357,10 @@
       <button class="swatch" style="background:#e63946" onclick="setColor('#e63946',this)"></button>
       <button class="swatch" style="background:#1d63d1" onclick="setColor('#1d63d1',this)"></button>
       <button class="swatch" style="background:#2e8b57" onclick="setColor('#2e8b57',this)"></button>
-      <select id="widthSelect" onchange="setWidth(this.value)">
-        <option value="3">얇게</option>
-        <option value="6" selected>보통</option>
-        <option value="11">굵게</option>
-      </select>
+      <div class="width-control">
+        <span class="width-dot" id="widthDot"></span>
+        <input type="range" id="widthSlider" min="2" max="18" step="1" value="6" oninput="setWidth(this.value)">
+      </div>
       <button class="tool-btn" id="eraserBtn" onclick="toggleEraser()">🧹 지우개</button>
       <button class="tool-btn" onclick="undoStroke()">↩️ 실행취소</button>
       <button class="tool-btn" onclick="clearPage()">🗑️ 전체지우기</button>
@@ -692,9 +701,26 @@ async function loadResults(){
   currentResultsDate = date;
   currentResultsSubs = subs;
 
-  area.innerHTML = pageCount===0
-    ? `<div class="empty-note">${date}에 등록된 학습지가 없어요.<br>제출 여부만 아래에서 확인할 수 있어요.</div>`
-    : '';
+  const submitted = roster.filter(name => subs[name] && subs[name].submitted);
+  const unsubmitted = roster.filter(name => !(subs[name] && subs[name].submitted));
+
+  area.innerHTML = '';
+
+  const summaryCard = document.createElement('div');
+  summaryCard.className = 'card';
+  summaryCard.innerHTML = `
+    <h3>제출 현황 (${submitted.length}/${roster.length}명 제출)</h3>
+    <div class="status-msg show ok">✅ 제출완료 ${submitted.length}명${submitted.length ? ' — ' + submitted.map(n=>`<b>${n}</b>`).join(', ') : ''}</div>
+    <div class="status-msg show ${unsubmitted.length ? 'err' : 'ok'}" style="margin-top:8px;">${unsubmitted.length ? `⏳ 미제출 ${unsubmitted.length}명 — ` + unsubmitted.map(n=>`<b>${n}</b>`).join(', ') : '🎉 미제출 학생 없음'}</div>
+  `;
+  area.appendChild(summaryCard);
+
+  if(pageCount===0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.innerHTML = `${date}에 등록된 학습지가 없어요.<br>제출 여부만 아래에서 확인할 수 있어요.`;
+    area.appendChild(note);
+  }
 
   const gridWrap = document.createElement('div');
   gridWrap.className = 'result-grid';
@@ -815,6 +841,11 @@ let submittedFlag = false;
 
 let drawColor = '#1a1a1a';
 let drawWidth = 6;
+let boardScale = 1;
+let boardTranslate = {x:0, y:0};
+let activePointers = new Map();
+let pinchState = null;
+let isZoomGesture = false;
 let eraserOn = false;
 let isDrawing = false;
 let currentStroke = null;
@@ -852,6 +883,7 @@ async function enterWorksheet(){
 
 function loadPage(idx){
   wsCurrentPage = idx;
+  resetZoom(true);
   const img = document.getElementById('pageImage');
   const canvas = document.getElementById('drawCanvas');
   img.onload = ()=>{
@@ -862,7 +894,7 @@ function loadPage(idx){
     setupCanvasEvents(canvas);
   };
   img.src = wsPages[idx];
-  document.getElementById('wsPageInd').textContent = `${idx+1} / ${wsPages.length}`;
+  document.getElementById('wsPageInd').textContent = `총 ${wsPages.length}장 중 ${idx+1}번째`;
   document.getElementById('prevPageBtn').disabled = idx<=0;
   document.getElementById('nextPageBtn').disabled = idx>=wsPages.length-1;
 }
@@ -878,8 +910,18 @@ function setColor(c, btnEl){
   document.getElementById('eraserBtn').classList.remove('on');
   document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
   btnEl.classList.add('active');
+  const dot = document.getElementById('widthDot');
+  if(dot) dot.style.background = c;
 }
-function setWidth(v){ drawWidth = parseFloat(v); }
+function setWidth(v){
+  drawWidth = parseFloat(v);
+  const dot = document.getElementById('widthDot');
+  if(dot){
+    const size = Math.max(4, Math.min(24, drawWidth * 1.4));
+    dot.style.width = size + 'px';
+    dot.style.height = size + 'px';
+  }
+}
 function toggleEraser(){
   eraserOn = !eraserOn;
   document.getElementById('eraserBtn').classList.toggle('on', eraserOn);
@@ -906,9 +948,88 @@ function getCanvasPoint(canvas, evt){
   };
 }
 
+/* ---------- 핀치 확대/축소 ---------- */
+function wrapPoint(evt){
+  const wrap = document.querySelector('.board-wrap');
+  const r = wrap.getBoundingClientRect();
+  return {x: evt.clientX - r.left, y: evt.clientY - r.top};
+}
+function getMidpoint(p1, p2){ return {x:(p1.x+p2.x)/2, y:(p1.y+p2.y)/2}; }
+function getDistance(p1, p2){ return Math.hypot(p1.x-p2.x, p1.y-p2.y); }
+
+function applyBoardTransform(){
+  const board = document.getElementById('board');
+  if(!board) return;
+  board.style.transform = `translate(${boardTranslate.x}px, ${boardTranslate.y}px) scale(${boardScale})`;
+  const btn = document.getElementById('zoomResetBtn');
+  if(btn) btn.style.display = boardScale > 1.02 ? 'flex' : 'none';
+}
+function clampBoardTranslate(){
+  const wrap = document.querySelector('.board-wrap');
+  const board = document.getElementById('board');
+  if(!wrap || !board) return;
+  const wrapW = wrap.clientWidth, wrapH = wrap.clientHeight;
+  const boardW = board.offsetWidth * boardScale;
+  const boardH = board.offsetHeight * boardScale;
+  const minX = Math.min(0, wrapW - boardW);
+  const minY = Math.min(0, wrapH - boardH);
+  boardTranslate.x = Math.max(minX, Math.min(0, boardTranslate.x));
+  boardTranslate.y = Math.max(minY, Math.min(0, boardTranslate.y));
+}
+function startPinch(){
+  const pts = Array.from(activePointers.values());
+  if(pts.length < 2) return;
+  const [p1, p2] = pts;
+  const dist = getDistance(p1, p2);
+  const mid = getMidpoint(p1, p2);
+  pinchState = {
+    startDist: dist || 1,
+    startScale: boardScale,
+    contentPoint: {
+      x: (mid.x - boardTranslate.x) / boardScale,
+      y: (mid.y - boardTranslate.y) / boardScale
+    }
+  };
+}
+function resetZoom(instant){
+  activePointers.clear();
+  pinchState = null;
+  isZoomGesture = false;
+  isDrawing = false;
+  currentStroke = null;
+  boardScale = 1;
+  boardTranslate = {x:0, y:0};
+  const board = document.getElementById('board');
+  if(!board) return;
+  if(instant){
+    board.style.transition = 'none';
+    applyBoardTransform();
+  }else{
+    board.style.transition = 'transform .2s ease';
+    applyBoardTransform();
+    setTimeout(()=>{ board.style.transition = ''; }, 220);
+  }
+}
+
+/* ---------- 그리기 + 핀치 통합 포인터 처리 ---------- */
 function onPointerDown(e){
   const canvas = e.target;
   canvas.setPointerCapture(e.pointerId);
+  activePointers.set(e.pointerId, wrapPoint(e));
+
+  if(activePointers.size >= 2){
+    if(isDrawing){
+      isDrawing = false;
+      currentStroke = null;
+      redrawStrokes(); // 두 손가락이 닿는 순간 그리던 미완성 선은 취소
+    }
+    isZoomGesture = true;
+    startPinch();
+    return;
+  }
+
+  if(isZoomGesture) return; // 핀치 제스처 도중엔 새 선을 시작하지 않음
+
   isDrawing = true;
   const p = getCanvasPoint(canvas, e);
   currentStroke = {
@@ -919,6 +1040,27 @@ function onPointerDown(e){
   };
 }
 function onPointerMove(e){
+  if(activePointers.has(e.pointerId)){
+    activePointers.set(e.pointerId, wrapPoint(e));
+  }
+
+  if(activePointers.size >= 2){
+    if(!pinchState) startPinch();
+    const pts = Array.from(activePointers.values());
+    const [p1, p2] = pts;
+    const dist = getDistance(p1, p2);
+    const mid = getMidpoint(p1, p2);
+    const newScale = Math.max(1, Math.min(4, pinchState.startScale * (dist / pinchState.startDist)));
+    boardScale = newScale;
+    boardTranslate = {
+      x: mid.x - pinchState.contentPoint.x * newScale,
+      y: mid.y - pinchState.contentPoint.y * newScale
+    };
+    clampBoardTranslate();
+    applyBoardTransform();
+    return;
+  }
+
   if(!isDrawing || !currentStroke) return;
   const canvas = e.target;
   const p = getCanvasPoint(canvas, e);
@@ -926,6 +1068,14 @@ function onPointerMove(e){
   drawSegment(canvas.getContext('2d'), currentStroke, currentStroke.points.length-2);
 }
 function onPointerUp(e){
+  activePointers.delete(e.pointerId);
+  if(activePointers.size < 2){
+    pinchState = null;
+  }
+  if(activePointers.size === 0){
+    isZoomGesture = false;
+  }
+
   if(!isDrawing) return;
   isDrawing = false;
   if(currentStroke && currentStroke.points.length>1){
