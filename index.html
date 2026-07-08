@@ -142,9 +142,9 @@
   .result-row .pages{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
   .mini-thumb{
     width:42px;height:56px;border-radius:6px;overflow:hidden;border:1.5px solid var(--paper-line);
-    cursor:pointer;background:#f2f0e8;
+    cursor:pointer;background:#f2f0e8;position:relative;
   }
-  .mini-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .mini-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}
   .mini-thumb.empty{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px;cursor:default;}
   .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;flex:0 0 auto;}
   .badge.done{background:var(--success-tint);color:var(--success);}
@@ -203,8 +203,10 @@
   .modal-box{background:#fff;border-radius:14px;max-width:92vw;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;}
   .modal-box .mhead{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--teal-dark);color:#fff;}
   .modal-box .mhead .spacer{flex:1;}
-  .modal-box img{max-width:88vw;max-height:74vh;object-fit:contain;display:block;background:#EDE7D8;}
-  .modal-box .mfoot{display:flex;gap:10px;padding:10px 14px;justify-content:center;background:#fff;}
+  .modal-imgwrap{position:relative;display:inline-block;background:#EDE7D8;line-height:0;}
+  .modal-imgwrap img{max-width:88vw;max-height:74vh;object-fit:contain;display:block;}
+  .modal-imgwrap img#modalImgStrokes{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+  .modal-box .mfoot{display:flex;gap:10px;padding:10px 14px;justify-content:center;background:#fff;flex-wrap:wrap;}
 
   .loading{padding:16px;text-align:center;color:var(--muted);font-size:14px;}
   .empty-note{padding:20px;text-align:center;color:var(--muted);font-size:14px;line-height:1.7;}
@@ -370,11 +372,15 @@
       <div class="spacer"></div>
       <button class="icon-btn" onclick="closeModal()">닫기 ✕</button>
     </div>
-    <img id="modalImg" src="">
+    <div class="modal-imgwrap">
+      <img id="modalImgBase" src="">
+      <img id="modalImgStrokes" src="">
+    </div>
     <div class="mfoot">
       <button class="tool-btn" id="modalPrev" onclick="modalNav(-1)">◀ 이전 장</button>
       <button class="tool-btn" id="modalNext" onclick="modalNav(1)">다음 장 ▶</button>
-      <a class="btn coral" id="modalDownload" download="학습지.jpg">저장</a>
+      <a class="btn ghost" id="modalDownloadBase" download="학습지_원본.jpg">학습지 저장</a>
+      <a class="btn coral" id="modalDownloadStrokes" download="필기.png">필기 저장</a>
     </div>
   </div>
 </div>
@@ -697,11 +703,12 @@ async function loadResults(){
     const row = document.createElement('div');
     row.className = 'result-row';
     const pagesHtml = [];
-    const total = pageCount || (sub && sub.pages ? Object.keys(sub.pages).length : 0);
+    const total = pageCount || (sub && sub.strokePages ? Object.keys(sub.strokePages).length : 0);
     for(let i=0;i<total;i++){
-      const src = sub && sub.pages && sub.pages[i];
-      if(src){
-        pagesHtml.push(`<div class="mini-thumb" onclick='openModalFromResults(${JSON.stringify(name)},${i})'><img src="${src}" loading="lazy"></div>`);
+      const strokeSrc = sub && sub.strokePages && sub.strokePages[i];
+      const baseSrc = (sub && sub.basePages && sub.basePages[i]) || (ws && ws.pageUrls && ws.pageUrls[i]) || '';
+      if(strokeSrc){
+        pagesHtml.push(`<div class="mini-thumb" onclick='openModalFromResults(${JSON.stringify(name)},${i})'><img src="${baseSrc}" loading="lazy"><img src="${strokeSrc}" loading="lazy"></div>`);
       }else{
         pagesHtml.push(`<div class="mini-thumb empty">–</div>`);
       }
@@ -718,30 +725,41 @@ async function loadResults(){
 
 let currentResultsDate = null;
 let currentResultsSubs = null;
-let modalPages = [];
+let modalPages = []; // [{base, strokes}, ...]
 let modalIndex = 0;
 
 function openModalFromResults(name, pageIndex){
   const sub = currentResultsSubs[name];
-  if(!sub || !sub.pages) return;
-  const sortedKeys = Object.keys(sub.pages).sort((a,b)=>a-b);
-  modalPages = sortedKeys.map(k=>sub.pages[k]);
+  if(!sub || !sub.strokePages) return;
+  const sortedKeys = Object.keys(sub.strokePages).sort((a,b)=>a-b);
+  modalPages = sortedKeys.map(k=>({
+    base: (sub.basePages && sub.basePages[k]) || '',
+    strokes: sub.strokePages[k]
+  }));
   modalIndex = sortedKeys.indexOf(String(pageIndex));
   document.getElementById('modalTitle').textContent = `${name} — ${currentResultsDate}`;
   renderModal();
   document.getElementById('modalBg').classList.add('show');
 }
+async function setDownloadLink(el, url, filename){
+  if(!url){ el.style.display='none'; return; }
+  el.style.display='';
+  el.href = url; // 우선 원본 URL로 연결(즉시 열람 가능하게)
+  el.removeAttribute('download');
+  try{
+    const blobUrl = await downloadAsBlobUrl(url);
+    el.href = blobUrl;
+    el.download = filename;
+  }catch(e){ /* 실패 시 원본 URL로 새 탭에서 열람 */ el.target = '_blank'; }
+}
 async function renderModal(){
-  const src = modalPages[modalIndex];
-  document.getElementById('modalImg').src = src;
+  const p = modalPages[modalIndex];
+  document.getElementById('modalImgBase').src = p.base;
+  document.getElementById('modalImgStrokes').src = p.strokes;
   document.getElementById('modalPrev').disabled = modalIndex<=0;
   document.getElementById('modalNext').disabled = modalIndex>=modalPages.length-1;
-  const dl = document.getElementById('modalDownload');
-  dl.href = src; // 우선 원본 URL로 연결(즉시 열람 가능하게)
-  try{
-    const blobUrl = await downloadAsBlobUrl(src);
-    dl.href = blobUrl;
-  }catch(e){ /* 실패 시 원본 URL 유지 */ }
+  setDownloadLink(document.getElementById('modalDownloadBase'), p.base, '학습지_원본.jpg');
+  setDownloadLink(document.getElementById('modalDownloadStrokes'), p.strokes, '필기.png');
 }
 function modalNav(d){
   modalIndex = Math.max(0, Math.min(modalPages.length-1, modalIndex+d));
@@ -987,24 +1005,25 @@ window.addEventListener('resize', ()=>{
   if(document.getElementById('screen-worksheet').classList.contains('active')) fitBoard();
 });
 
-function flattenPage(idx){
+// 페이지의 필기(strokes)만 투명 배경 PNG로 추출한다.
+// 원본 학습지 이미지는 픽셀을 읽지 않고 크기(naturalWidth/Height)만 참고하므로
+// 원격 이미지를 캔버스에 그리지 않아 CORS/캔버스 오염 문제가 발생하지 않는다.
+function exportStrokesPNG(idx){
   return new Promise((resolve, reject)=>{
+    const strokes = wsStrokes[idx] || [];
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = ()=>{
       const c = document.createElement('canvas');
       c.width = img.naturalWidth; c.height = img.naturalHeight;
       const ctx = c.getContext('2d');
-      ctx.drawImage(img,0,0,c.width,c.height);
-      const strokes = wsStrokes[idx] || [];
       strokes.forEach(s=>drawSegment(ctx, s, 0));
       try{
-        resolve(canvasToDataUrlAdaptive(c));
+        resolve(c.toDataURL('image/png'));
       }catch(err){
         reject(err);
       }
     };
-    img.onerror = ()=>reject(new Error('학습지 이미지를 불러오지 못했어요'));
+    img.onerror = ()=>reject(new Error('학습지 이미지 크기를 확인하지 못했어요'));
     img.src = wsPages[idx];
   });
 }
@@ -1013,16 +1032,16 @@ async function submitWork(){
   const banner = document.getElementById('submitBanner');
   banner.textContent = '제출 처리 중...';
   try{
-    const urlMap = {};
+    const strokeUrlMap = {};
     for(let i=0;i<wsPages.length;i++){
       banner.textContent = `제출 처리 중... (${i+1}/${wsPages.length})`;
-      const flatDataUrl = await flattenPage(i);
-      const path = `submissions/${wsDate}/${sanitizeKeyPart(selectedStudent)}/page${i}_${Date.now()}.jpg`;
-      urlMap[i] = await uploadDataUrl(path, flatDataUrl);
+      const pngDataUrl = await exportStrokesPNG(i);
+      const path = `submissions/${wsDate}/${sanitizeKeyPart(selectedStudent)}/strokes${i}_${Date.now()}.png`;
+      strokeUrlMap[i] = await uploadDataUrl(path, pngDataUrl);
     }
     const ok = await fsSetDoc(
       'submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent),
-      {pages:urlMap, submitted:true, updatedAt:new Date().toISOString(), student:selectedStudent}
+      {strokePages:strokeUrlMap, basePages:wsPages, submitted:true, updatedAt:new Date().toISOString(), student:selectedStudent}
     );
     submittedFlag = ok;
     updateSubmitBanner();
