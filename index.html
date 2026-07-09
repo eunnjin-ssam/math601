@@ -149,6 +149,8 @@
   .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;flex:0 0 auto;}
   .badge.done{background:var(--success-tint);color:var(--success);}
   .badge.pending{background:#F0EBDC;color:var(--muted);}
+  .badge.warn{background:#FBEAE7;color:var(--danger);}
+  .badge.wait{background:var(--teal-tint);color:var(--teal-dark);}
 
   /* ---------- 학생 이름 선택 ---------- */
   #screen-student-select .panel{align-items:stretch;}
@@ -175,6 +177,7 @@
   }
   .board{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.12);border-radius:4px;transform-origin:0 0;}
   .board img{display:block;user-select:none;pointer-events:none;}
+  .board img#refLayerImg{position:absolute;top:0;left:0;}
   .board canvas{position:absolute;top:0;left:0;touch-action:none;cursor:crosshair;}
   .zoom-reset-btn{
     position:absolute;top:12px;right:12px;z-index:5;display:none;align-items:center;gap:4px;
@@ -202,6 +205,7 @@
     flex:0 0 auto;text-align:center;font-size:13px;padding:6px;color:var(--muted);background:#fff;
   }
   .submit-banner.done{color:var(--success);font-weight:700;}
+  .submit-banner.warn{color:var(--danger);font-weight:700;}
 
   /* ---------- 모달(확대보기) ---------- */
   .modal-bg{
@@ -214,7 +218,7 @@
   .modal-box .mhead .spacer{flex:1;}
   .modal-imgwrap{position:relative;display:inline-block;background:#EDE7D8;line-height:0;}
   .modal-imgwrap img{max-width:88vw;max-height:74vh;object-fit:contain;display:block;}
-  .modal-imgwrap img#modalImgStrokes{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+  .modal-imgwrap img#modalImgStrokes,.modal-imgwrap img#modalImgTeacher{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
   .modal-box .mfoot{display:flex;gap:10px;padding:10px 14px;justify-content:center;background:#fff;flex-wrap:wrap;}
 
   .loading{padding:16px;text-align:center;color:var(--muted);font-size:14px;}
@@ -337,10 +341,10 @@
     </div>
   </div>
 
-  <!-- ===================== 학습지 풀이 화면 ===================== -->
+  <!-- ===================== 학습지 풀이 / 채점 화면 ===================== -->
   <div class="screen" id="screen-worksheet">
     <div class="ws-header">
-      <button class="icon-btn" style="background:rgba(255,255,255,.16);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12.5px;" onclick="goStudentSelect()">← 나가기</button>
+      <button class="icon-btn" style="background:rgba(255,255,255,.16);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12.5px;" onclick="exitWorksheetScreen()">← 나가기</button>
       <div class="who" id="wsWho"></div>
       <div class="pageind" id="wsPageInd"></div>
     </div>
@@ -348,15 +352,16 @@
       <button class="zoom-reset-btn" id="zoomResetBtn" onclick="resetZoom()">↺ 원래 크기</button>
       <div class="board" id="board">
         <img id="pageImage" src="" alt="학습지">
+        <img id="refLayerImg" alt="" style="display:none;">
         <canvas id="drawCanvas"></canvas>
       </div>
     </div>
     <div class="submit-banner" id="submitBanner">아직 제출 전이에요</div>
     <div class="toolbar">
-      <button class="swatch active" style="background:#1a1a1a" onclick="setColor('#1a1a1a',this)"></button>
-      <button class="swatch" style="background:#e63946" onclick="setColor('#e63946',this)"></button>
-      <button class="swatch" style="background:#1d63d1" onclick="setColor('#1d63d1',this)"></button>
-      <button class="swatch" style="background:#2e8b57" onclick="setColor('#2e8b57',this)"></button>
+      <button class="swatch active" id="swatchBlack" style="background:#1a1a1a" onclick="setColor('#1a1a1a',this)"></button>
+      <button class="swatch" id="swatchRed" style="background:#e63946" onclick="setColor('#e63946',this)"></button>
+      <button class="swatch" id="swatchBlue" style="background:#1d63d1" onclick="setColor('#1d63d1',this)"></button>
+      <button class="swatch" id="swatchGreen" style="background:#2e8b57" onclick="setColor('#2e8b57',this)"></button>
       <div class="width-control">
         <span class="width-dot" id="widthDot"></span>
         <input type="range" id="widthSlider" min="2" max="18" step="1" value="6" oninput="setWidth(this.value)">
@@ -365,9 +370,11 @@
       <button class="tool-btn" onclick="undoStroke()">↩️ 실행취소</button>
       <button class="tool-btn" onclick="clearPage()">🗑️ 전체지우기</button>
       <div class="spacer"></div>
+      <button class="tool-btn grading-only" id="gradeNeedsRevisionBtn" onclick="setGradingStatus('needs_revision')" style="display:none;">🔁 재제출 필요</button>
+      <button class="tool-btn grading-only" id="gradeConfirmBtn" onclick="setGradingStatus('confirmed')" style="display:none;">✅ 확인 완료</button>
       <button class="tool-btn" id="prevPageBtn" onclick="changePage(-1)">◀ 이전</button>
       <button class="tool-btn" id="nextPageBtn" onclick="changePage(1)">다음 ▶</button>
-      <button class="btn coral" onclick="submitWork()">✅ 제출하기</button>
+      <button class="btn coral" id="submitMainBtn" onclick="submitWork()">✅ 제출하기</button>
     </div>
   </div>
 
@@ -384,6 +391,7 @@
     <div class="modal-imgwrap">
       <img id="modalImgBase" src="">
       <img id="modalImgStrokes" src="">
+      <img id="modalImgTeacher" src="">
     </div>
     <div class="mfoot">
       <button class="tool-btn" id="modalPrev" onclick="modalNav(-1)">◀ 이전 장</button>
@@ -466,9 +474,9 @@ async function fsGetDoc(col, id){
     return null;
   }
 }
-async function fsSetDoc(col, id, data){
+async function fsSetDoc(col, id, data, merge){
   try{
-    await db.collection(col).doc(id).set(data);
+    await db.collection(col).doc(id).set(data, merge ? {merge:true} : {});
     return true;
   }catch(e){
     console.error('저장 실패', col, id, e);
@@ -742,11 +750,19 @@ async function loadResults(){
     row.innerHTML = `
       <div class="name">${name}</div>
       <div class="pages">${pagesHtml.join('') || '<span class="hint">해당 없음</span>'}</div>
-      <div class="badge ${sub && sub.submitted ? 'done':'pending'}">${sub && sub.submitted ? '제출완료':'미제출'}</div>
+      ${statusBadgeHtml(sub)}
+      ${sub && sub.submitted ? `<button class="tool-btn" style="flex:0 0 auto;" onclick='enterGradingFromResults(${JSON.stringify(name)})'>✏️ 채점</button>` : ''}
     `;
     gridWrap.appendChild(row);
   });
   area.appendChild(gridWrap);
+}
+
+function statusBadgeHtml(sub){
+  if(!sub || !sub.submitted) return `<div class="badge pending">미제출</div>`;
+  if(sub.status==='needs_revision') return `<div class="badge warn">재제출 필요</div>`;
+  if(sub.status==='confirmed') return `<div class="badge done">확인 완료</div>`;
+  return `<div class="badge wait">채점 대기</div>`;
 }
 
 let currentResultsDate = null;
@@ -760,7 +776,8 @@ function openModalFromResults(name, pageIndex){
   const sortedKeys = Object.keys(sub.strokePages).sort((a,b)=>a-b);
   modalPages = sortedKeys.map(k=>({
     base: (sub.basePages && sub.basePages[k]) || '',
-    strokes: sub.strokePages[k]
+    strokes: sub.strokePages[k],
+    teacher: (sub.teacherStrokePages && sub.teacherStrokePages[k]) || ''
   }));
   modalIndex = sortedKeys.indexOf(String(pageIndex));
   document.getElementById('modalTitle').textContent = `${name} — ${currentResultsDate}`;
@@ -782,6 +799,7 @@ async function renderModal(){
   const p = modalPages[modalIndex];
   document.getElementById('modalImgBase').src = p.base;
   document.getElementById('modalImgStrokes').src = p.strokes;
+  document.getElementById('modalImgTeacher').src = p.teacher || '';
   document.getElementById('modalPrev').disabled = modalIndex<=0;
   document.getElementById('modalNext').disabled = modalIndex>=modalPages.length-1;
   setDownloadLink(document.getElementById('modalDownloadBase'), p.base, '학습지_원본.jpg');
@@ -793,6 +811,11 @@ function modalNav(d){
 }
 function closeModal(){
   document.getElementById('modalBg').classList.remove('show');
+}
+function enterGradingFromResults(name){
+  closeModal();
+  showScreen('screen-teacher'); // 임시로 유지, enterGrading에서 바로 덮어씀
+  enterGrading(currentResultsDate, name);
 }
 
 /* ============================================================
@@ -831,13 +854,24 @@ async function goStudentSelect(){
 }
 
 /* ============================================================
-   학생 - 학습지 풀이
+   학생 풀이 / 선생님 채점 — 공통 그리기 엔진
+   appMode 이 'student'면 학생이 wsStrokes를 그리고,
+   'grading'이면 선생님이 gradingStrokes(채점 표시)를 그린다.
 ============================================================ */
+let appMode = 'student'; // 'student' | 'grading'
+
 let wsDate = null;
-let wsPages = [];           // 오늘 학습지 페이지 URL 목록
-let wsStrokes = [];         // 페이지별 stroke 배열
+let wsPages = [];              // 오늘 학습지 페이지 URL 목록
+let wsStrokes = [];             // 학생 필기(페이지별 stroke 배열) — 이어서 수정 가능
+let wsTeacherStrokePages = {};  // 선생님이 채점하며 남긴 필기(투명 PNG, 참고용)
 let wsCurrentPage = 0;
 let submittedFlag = false;
+
+let gradingDate = null;
+let gradingStudent = null;
+let gradingBasePages = [];        // 채점 대상 학습지 원본 페이지 URL
+let gradingStudentLayerPages = {};// 학생 필기(투명 PNG, 참고용 배경)
+let gradingStrokes = [];          // 선생님이 새로 그리는 채점 필기(페이지별)
 
 let drawColor = '#1a1a1a';
 let drawWidth = 6;
@@ -850,8 +884,40 @@ let eraserOn = false;
 let isDrawing = false;
 let currentStroke = null;
 
+function currentStrokesArray(){ return appMode==='grading' ? gradingStrokes : wsStrokes; }
+function currentPagesArray(){ return appMode==='grading' ? gradingBasePages : wsPages; }
+
+function setActiveSwatchUI(color){
+  const map = {'#1a1a1a':'swatchBlack','#e63946':'swatchRed','#1d63d1':'swatchBlue','#2e8b57':'swatchGreen'};
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+  const el = document.getElementById(map[color]);
+  if(el) el.classList.add('active');
+  const dot = document.getElementById('widthDot');
+  if(dot) dot.style.background = color;
+}
+
+function roundStrokes(strokes){
+  return (strokes||[]).map(s=>({
+    mode: s.mode, color: s.color, width: s.width,
+    points: s.points.map(p=>({x:Math.round(p.x*10)/10, y:Math.round(p.y*10)/10}))
+  }));
+}
+function loadStrokesFromData(data, pageCount){
+  const arr = [];
+  for(let i=0;i<pageCount;i++){
+    const pageStrokes = (data && data[i]) || [];
+    arr.push(pageStrokes.map(s=>({
+      mode:s.mode, color:s.color, width:s.width,
+      points:(s.points||[]).map(p=>({x:p.x, y:p.y}))
+    })));
+  }
+  return arr;
+}
+
+/* ---------- 학생: 학습지 풀기 ---------- */
 async function enterWorksheet(){
   if(!selectedStudent) return;
+  appMode = 'student';
   wsDate = todayStr();
   const ws = await fsGetDoc('worksheets', wsDate);
   if(!ws || !ws.pageUrls || ws.pageUrls.length===0){
@@ -865,27 +931,92 @@ async function enterWorksheet(){
   }
   document.querySelector('.toolbar').style.display = 'flex';
   document.getElementById('submitBanner').style.display = 'block';
-  document.getElementById('board').innerHTML = '<img id="pageImage" src="" alt="학습지"><canvas id="drawCanvas"></canvas>';
+  document.querySelectorAll('.grading-only').forEach(b=>b.style.display='none');
+  document.getElementById('submitMainBtn').textContent = '✅ 제출하기';
+  document.getElementById('board').innerHTML =
+    '<img id="pageImage" src="" alt="학습지"><img id="refLayerImg" alt="" style="display:none;"><canvas id="drawCanvas"></canvas>';
 
   wsPages = ws.pageUrls;
-  wsStrokes = wsPages.map(()=>[]);
-  wsCurrentPage = 0;
-  submittedFlag = false;
 
   const existing = await fsGetDoc('submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent));
   submittedFlag = !!(existing && existing.submitted);
+  wsStrokes = (existing && existing.strokeData)
+    ? loadStrokesFromData(existing.strokeData, wsPages.length)
+    : wsPages.map(()=>[]);
+  wsTeacherStrokePages = (existing && existing.teacherStrokePages) || {};
+  wsCurrentPage = 0;
+
+  drawColor = '#1a1a1a'; eraserOn = false; drawWidth = 6;
+  setActiveSwatchUI(drawColor);
+  const widthSlider = document.getElementById('widthSlider');
+  if(widthSlider) widthSlider.value = 6;
+  setWidth(6);
+  document.getElementById('eraserBtn').classList.remove('on');
 
   document.getElementById('wsWho').textContent = selectedStudent;
   showScreen('screen-worksheet');
   loadPage(0);
-  updateSubmitBanner();
+  updateSubmitBanner(existing);
 }
 
+/* ---------- 선생님: 채점하기 ---------- */
+async function enterGrading(date, student){
+  const sub = await fsGetDoc('submissions', date+'_'+sanitizeKeyPart(student));
+  if(!sub || !sub.submitted){
+    alert('아직 제출된 내용이 없어요.');
+    return;
+  }
+  appMode = 'grading';
+  gradingDate = date;
+  gradingStudent = student;
+  gradingBasePages = sub.basePages || [];
+  gradingStudentLayerPages = sub.strokePages || {};
+  gradingStrokes = loadStrokesFromData(sub.teacherStrokeData, gradingBasePages.length);
+  wsCurrentPage = 0;
+
+  document.querySelector('.toolbar').style.display = 'flex';
+  document.getElementById('submitBanner').style.display = 'block';
+  document.querySelectorAll('.grading-only').forEach(b=>b.style.display='flex');
+  document.getElementById('submitMainBtn').textContent = '💾 채점 저장';
+  document.getElementById('board').innerHTML =
+    '<img id="pageImage" src="" alt="학습지"><img id="refLayerImg" alt="" style="display:none;"><canvas id="drawCanvas"></canvas>';
+
+  drawColor = '#e63946'; eraserOn = false; drawWidth = 6; // 채점은 빨간펜 기본
+  setActiveSwatchUI(drawColor);
+  const widthSlider = document.getElementById('widthSlider');
+  if(widthSlider) widthSlider.value = 6;
+  setWidth(6);
+  document.getElementById('eraserBtn').classList.remove('on');
+
+  document.getElementById('wsWho').textContent = `${student} 채점 중`;
+  showScreen('screen-worksheet');
+  loadPage(0);
+
+  const banner = document.getElementById('submitBanner');
+  banner.textContent = '학생 필기(검정/색)를 참고해서 빨간펜으로 채점해보세요.';
+  banner.classList.remove('done','warn');
+}
+
+function exitWorksheetScreen(){
+  if(appMode==='grading'){
+    appMode = 'student';
+    showScreen('screen-teacher');
+    switchTeacherTab('results');
+    loadResults();
+  }else{
+    goStudentSelect();
+  }
+}
+
+/* ---------- 페이지 로딩/이동 ---------- */
 function loadPage(idx){
   wsCurrentPage = idx;
   resetZoom(true);
   const img = document.getElementById('pageImage');
   const canvas = document.getElementById('drawCanvas');
+  const refImg = document.getElementById('refLayerImg');
+  const pages = currentPagesArray();
+
   img.onload = ()=>{
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
@@ -893,15 +1024,25 @@ function loadPage(idx){
     redrawStrokes();
     setupCanvasEvents(canvas);
   };
-  img.src = wsPages[idx];
-  document.getElementById('wsPageInd').textContent = `총 ${wsPages.length}장 중 ${idx+1}번째`;
+  img.src = pages[idx];
+
+  const refSrc = appMode==='grading'
+    ? (gradingStudentLayerPages[idx] || '')
+    : (wsTeacherStrokePages[idx] || '');
+  if(refImg){
+    refImg.src = refSrc || '';
+    refImg.style.display = refSrc ? 'block' : 'none';
+  }
+
+  document.getElementById('wsPageInd').textContent = `총 ${pages.length}장 중 ${idx+1}번째`;
   document.getElementById('prevPageBtn').disabled = idx<=0;
-  document.getElementById('nextPageBtn').disabled = idx>=wsPages.length-1;
+  document.getElementById('nextPageBtn').disabled = idx>=pages.length-1;
 }
 
 function changePage(delta){
   const next = wsCurrentPage + delta;
-  if(next<0 || next>=wsPages.length) return;
+  const pages = currentPagesArray();
+  if(next<0 || next>=pages.length) return;
   loadPage(next);
 }
 
@@ -1079,7 +1220,7 @@ function onPointerUp(e){
   if(!isDrawing) return;
   isDrawing = false;
   if(currentStroke && currentStroke.points.length>1){
-    wsStrokes[wsCurrentPage].push(currentStroke);
+    currentStrokesArray()[wsCurrentPage].push(currentStroke);
   }
   currentStroke = null;
 }
@@ -1106,39 +1247,50 @@ function redrawStrokes(){
   const canvas = document.getElementById('drawCanvas');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  const strokes = wsStrokes[wsCurrentPage] || [];
+  const strokes = currentStrokesArray()[wsCurrentPage] || [];
   strokes.forEach(s=>drawSegment(ctx, s, 0));
 }
 
 function undoStroke(){
-  const strokes = wsStrokes[wsCurrentPage];
-  if(strokes.length===0) return;
+  const strokes = currentStrokesArray()[wsCurrentPage];
+  if(!strokes || strokes.length===0) return;
   strokes.pop();
   redrawStrokes();
 }
 function clearPage(){
-  if(wsStrokes[wsCurrentPage].length===0) return;
+  const strokes = currentStrokesArray();
+  if(!strokes[wsCurrentPage] || strokes[wsCurrentPage].length===0) return;
   if(!confirm('이 페이지에 그린 내용을 모두 지울까요?')) return;
-  wsStrokes[wsCurrentPage] = [];
+  strokes[wsCurrentPage] = [];
   redrawStrokes();
 }
 
-function updateSubmitBanner(){
+function updateSubmitBanner(existing){
   const b = document.getElementById('submitBanner');
-  if(submittedFlag){
-    b.textContent = '✅ 제출 완료! (다시 풀고 다시 제출할 수도 있어요)';
-    b.classList.add('done');
-  }else{
+  const status = existing && existing.status;
+  if(!submittedFlag){
     b.textContent = '아직 제출 전이에요. 다 풀면 "제출하기"를 눌러주세요.';
-    b.classList.remove('done');
+    b.classList.remove('done','warn');
+    return;
+  }
+  if(status==='needs_revision'){
+    b.textContent = '🔁 선생님이 다시 확인해달라고 했어요! 빨간 표시를 확인하고 고쳐서 다시 제출해주세요.';
+    b.classList.add('warn'); b.classList.remove('done');
+  }else if(status==='confirmed'){
+    b.textContent = '✅ 선생님이 확인 완료했어요! 잘했어요.';
+    b.classList.add('done'); b.classList.remove('warn');
+  }else{
+    b.textContent = '📨 제출 완료! 선생님 확인을 기다리고 있어요. (필요하면 계속 고쳐서 다시 제출해도 돼요)';
+    b.classList.remove('done','warn');
   }
 }
 
 // board-wrap 안에서 이미지 비율을 유지하며 최대한 꽉 차게 표시하고,
-// 캔버스 크기를 이미지 표시 크기와 정확히 맞춘다 (position:absolute + %높이 이슈 회피)
+// 캔버스/참고 레이어 크기를 이미지 표시 크기와 정확히 맞춘다 (position:absolute + %높이 이슈 회피)
 function fitBoard(){
   const img = document.getElementById('pageImage');
   const canvas = document.getElementById('drawCanvas');
+  const refImg = document.getElementById('refLayerImg');
   const wrap = document.querySelector('.board-wrap');
   if(!img || !canvas || !wrap || !img.naturalWidth) return;
   const availW = Math.max(50, wrap.clientWidth - 20);
@@ -1150,23 +1302,26 @@ function fitBoard(){
   img.style.height = h + 'px';
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
+  if(refImg){
+    refImg.style.width = w + 'px';
+    refImg.style.height = h + 'px';
+  }
 }
 window.addEventListener('resize', ()=>{
   if(document.getElementById('screen-worksheet').classList.contains('active')) fitBoard();
 });
 
-// 페이지의 필기(strokes)만 투명 배경 PNG로 추출한다.
+// 특정 페이지의 필기(strokes)만 투명 배경 PNG로 추출한다.
 // 원본 학습지 이미지는 픽셀을 읽지 않고 크기(naturalWidth/Height)만 참고하므로
 // 원격 이미지를 캔버스에 그리지 않아 CORS/캔버스 오염 문제가 발생하지 않는다.
-function exportStrokesPNG(idx){
+function exportStrokesPNG(strokes, pageUrl){
   return new Promise((resolve, reject)=>{
-    const strokes = wsStrokes[idx] || [];
     const img = new Image();
     img.onload = ()=>{
       const c = document.createElement('canvas');
       c.width = img.naturalWidth; c.height = img.naturalHeight;
       const ctx = c.getContext('2d');
-      strokes.forEach(s=>drawSegment(ctx, s, 0));
+      (strokes||[]).forEach(s=>drawSegment(ctx, s, 0));
       try{
         resolve(c.toDataURL('image/png'));
       }catch(err){
@@ -1174,27 +1329,43 @@ function exportStrokesPNG(idx){
       }
     };
     img.onerror = ()=>reject(new Error('학습지 이미지 크기를 확인하지 못했어요'));
-    img.src = wsPages[idx];
+    img.src = pageUrl;
   });
 }
 
-async function submitWork(){
+function submitWork(){
+  if(appMode==='grading') return submitGrading();
+  return submitStudentWork();
+}
+
+async function submitStudentWork(){
   const banner = document.getElementById('submitBanner');
   banner.textContent = '제출 처리 중...';
+  banner.classList.remove('done','warn');
   try{
     const strokeUrlMap = {};
+    const strokeDataOut = {};
     for(let i=0;i<wsPages.length;i++){
       banner.textContent = `제출 처리 중... (${i+1}/${wsPages.length})`;
-      const pngDataUrl = await exportStrokesPNG(i);
+      const pngDataUrl = await exportStrokesPNG(wsStrokes[i], wsPages[i]);
       const path = `submissions/${wsDate}/${sanitizeKeyPart(selectedStudent)}/strokes${i}_${Date.now()}.png`;
       strokeUrlMap[i] = await uploadDataUrl(path, pngDataUrl);
+      strokeDataOut[i] = roundStrokes(wsStrokes[i]);
     }
     const ok = await fsSetDoc(
       'submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent),
-      {strokePages:strokeUrlMap, basePages:wsPages, submitted:true, updatedAt:new Date().toISOString(), student:selectedStudent}
+      {
+        strokePages: strokeUrlMap,
+        strokeData: strokeDataOut,
+        basePages: wsPages,
+        submitted: true,
+        status: 'submitted',
+        updatedAt: new Date().toISOString(),
+        student: selectedStudent
+      },
+      true
     );
     submittedFlag = ok;
-    updateSubmitBanner();
     banner.textContent = ok
       ? '🎉 제출 완료! 수고했어요, ' + selectedStudent + '!'
       : '제출에 실패했어요. 다시 눌러주세요.';
@@ -1203,6 +1374,59 @@ async function submitWork(){
     console.error(err);
     banner.textContent = '제출 중 오류가 발생했어요. 인터넷 연결을 확인하고 다시 눌러주세요.';
     banner.classList.remove('done');
+  }
+}
+
+async function submitGrading(){
+  const banner = document.getElementById('submitBanner');
+  banner.textContent = '채점 내용 저장 중...';
+  banner.classList.remove('done','warn');
+  try{
+    const teacherUrlMap = {};
+    const teacherDataOut = {};
+    for(let i=0;i<gradingBasePages.length;i++){
+      banner.textContent = `저장 중... (${i+1}/${gradingBasePages.length})`;
+      const pngDataUrl = await exportStrokesPNG(gradingStrokes[i], gradingBasePages[i]);
+      const path = `grading/${gradingDate}/${sanitizeKeyPart(gradingStudent)}/mark${i}_${Date.now()}.png`;
+      teacherUrlMap[i] = await uploadDataUrl(path, pngDataUrl);
+      teacherDataOut[i] = roundStrokes(gradingStrokes[i]);
+    }
+    const ok = await fsSetDoc(
+      'submissions', gradingDate+'_'+sanitizeKeyPart(gradingStudent),
+      {
+        teacherStrokePages: teacherUrlMap,
+        teacherStrokeData: teacherDataOut,
+        teacherUpdatedAt: new Date().toISOString()
+      },
+      true
+    );
+    banner.textContent = ok ? '💾 채점 내용 저장 완료!' : '저장에 실패했어요. 다시 눌러주세요.';
+    banner.classList.toggle('done', ok);
+  }catch(err){
+    console.error(err);
+    banner.textContent = '저장 중 오류가 발생했어요. 인터넷 연결을 확인하고 다시 눌러주세요.';
+    banner.classList.remove('done');
+  }
+}
+
+async function setGradingStatus(status){
+  const banner = document.getElementById('submitBanner');
+  const ok = await fsSetDoc(
+    'submissions', gradingDate+'_'+sanitizeKeyPart(gradingStudent),
+    {status, teacherUpdatedAt:new Date().toISOString()},
+    true
+  );
+  if(!ok){
+    banner.textContent = '상태 저장에 실패했어요. 다시 눌러주세요.';
+    banner.classList.remove('done','warn');
+    return;
+  }
+  if(status==='confirmed'){
+    banner.textContent = '✅ "확인 완료"로 표시했어요!';
+    banner.classList.add('done'); banner.classList.remove('warn');
+  }else{
+    banner.textContent = '🔁 "재제출 필요"로 표시했어요. 학생이 다시 들어오면 안내가 보여요.';
+    banner.classList.add('warn'); banner.classList.remove('done');
   }
 }
 </script>
