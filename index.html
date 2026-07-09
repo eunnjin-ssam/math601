@@ -302,6 +302,16 @@
           <button class="btn coral block" style="margin-top:14px;" onclick="saveWorksheet()">이 학습지로 저장</button>
           <div class="status-msg" id="uploadStatus"></div>
         </div>
+        <div class="card">
+          <h3>정답 입력 (자동 채점 · 선택사항)</h3>
+          <div class="field-row">
+            <label class="small">문제 수</label>
+            <input type="text" inputmode="numeric" id="answerCount" style="width:70px;" placeholder="5">
+            <button class="btn ghost" onclick="buildAnswerRows()">문제 칸 만들기</button>
+          </div>
+          <div id="answerRows"></div>
+          <div class="hint">문제별로 유형(객관식/단답형)과 정답을 입력해두면, 학생이 답을 입력했을 때 자동으로 채점돼요. 빈칸으로 두면 그 문제는 자동채점에서 빠져요. "이 학습지로 저장" 버튼을 누르면 정답도 함께 저장돼요.</div>
+        </div>
       </div>
     </div>
 
@@ -372,6 +382,7 @@
       <div class="spacer"></div>
       <button class="tool-btn grading-only" id="gradeNeedsRevisionBtn" onclick="setGradingStatus('needs_revision')" style="display:none;">🔁 재제출 필요</button>
       <button class="tool-btn grading-only" id="gradeConfirmBtn" onclick="setGradingStatus('confirmed')" style="display:none;">✅ 확인 완료</button>
+      <button class="tool-btn" id="answerInputBtn" onclick="openAnswerModal()" style="display:none;">📝 답안입력</button>
       <button class="tool-btn" id="prevPageBtn" onclick="changePage(-1)">◀ 이전</button>
       <button class="tool-btn" id="nextPageBtn" onclick="changePage(1)">다음 ▶</button>
       <button class="btn coral" id="submitMainBtn" onclick="submitWork()">✅ 제출하기</button>
@@ -398,6 +409,21 @@
       <button class="tool-btn" id="modalNext" onclick="modalNav(1)">다음 장 ▶</button>
       <a class="btn ghost" id="modalDownloadBase" download="학습지_원본.jpg">학습지 저장</a>
       <a class="btn coral" id="modalDownloadStrokes" download="필기.png">필기 저장</a>
+    </div>
+  </div>
+</div>
+
+<!-- 답안 입력 모달 (학생) -->
+<div class="modal-bg" id="ansModalBg">
+  <div class="modal-box" style="width:340px;max-width:92vw;">
+    <div class="mhead">
+      <span>📝 답안 입력</span>
+      <div class="spacer"></div>
+      <button class="icon-btn" onclick="closeAnswerModal()">닫기 ✕</button>
+    </div>
+    <div class="panel" id="ansModalBody" style="max-height:60vh;"></div>
+    <div class="mfoot">
+      <button class="btn coral block" onclick="closeAnswerModal()">완료</button>
     </div>
   </div>
 </div>
@@ -632,6 +658,55 @@ async function loadExistingWorksheet(){
     note.textContent = `${date}에는 아직 등록된 학습지가 없어요. 새로 만들어보세요.`;
   }
   renderThumbs();
+  const key = (ws && ws.answerKey) || [];
+  document.getElementById('answerCount').value = key.length || '';
+  renderAnswerRows(key);
+}
+
+/* ---------- 선생님: 정답 입력 폼 ---------- */
+function answerRowHtml(q){
+  const no = q.no;
+  const type = q.type || 'choice';
+  const choiceCount = q.choiceCount || 5;
+  const answer = q.answer || '';
+  return `
+  <div class="ans-row" data-no="${no}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+    <span style="width:34px;font-weight:700;">${no}번</span>
+    <select class="ans-type" onchange="onAnswerTypeChange(this)">
+      <option value="choice"${type==='choice'?' selected':''}>객관식</option>
+      <option value="short"${type==='short'?' selected':''}>단답형</option>
+    </select>
+    <select class="ans-choicecount" style="${type==='choice'?'':'display:none;'}">
+      ${[3,4,5].map(n=>`<option value="${n}"${choiceCount==n?' selected':''}>${n}지선다</option>`).join('')}
+    </select>
+    <input type="text" class="ans-value" placeholder="정답" style="width:90px;" value="${String(answer).replace(/"/g,'&quot;')}">
+  </div>`;
+}
+function renderAnswerRows(answerKey){
+  const wrap = document.getElementById('answerRows');
+  wrap.innerHTML = (answerKey||[]).map((q,i)=>answerRowHtml({...q, no:i+1})).join('');
+}
+function onAnswerTypeChange(selEl){
+  const row = selEl.closest('.ans-row');
+  const cc = row.querySelector('.ans-choicecount');
+  cc.style.display = selEl.value==='choice' ? '' : 'none';
+}
+function buildAnswerRows(){
+  const n = Math.max(0, Math.min(200, parseInt(document.getElementById('answerCount').value,10) || 0));
+  const current = getAnswerKeyFromForm();
+  const next = [];
+  for(let i=0;i<n;i++){
+    next.push(current[i] || {no:i+1, type:'choice', choiceCount:5, answer:''});
+  }
+  renderAnswerRows(next);
+}
+function getAnswerKeyFromForm(){
+  return Array.from(document.querySelectorAll('#answerRows .ans-row')).map((row,i)=>({
+    no: i+1,
+    type: row.querySelector('.ans-type').value,
+    choiceCount: parseInt(row.querySelector('.ans-choicecount').value,10) || 5,
+    answer: row.querySelector('.ans-value').value.trim()
+  }));
 }
 
 async function saveWorksheet(){
@@ -656,7 +731,8 @@ async function saveWorksheet(){
       }
       statusEl.textContent = `저장 중... (${i+1}/${pendingPages.length})`;
     }
-    const ok = await fsSetDoc('worksheets', date, {pageUrls:urls, pageCount:urls.length, updatedAt:new Date().toISOString()});
+    const answerKey = getAnswerKeyFromForm();
+    const ok = await fsSetDoc('worksheets', date, {pageUrls:urls, pageCount:urls.length, answerKey, updatedAt:new Date().toISOString()});
     statusEl.className = 'status-msg show ' + (ok?'ok':'err');
     statusEl.textContent = ok ? `저장 완료! ${date} 학습지 ${urls.length}장이 등록됐어요.` : '저장에 실패했어요. 다시 시도해주세요.';
   }catch(err){
@@ -747,11 +823,15 @@ async function loadResults(){
         pagesHtml.push(`<div class="mini-thumb empty">–</div>`);
       }
     }
+    const auto = sub && sub.autoGrade;
+    row.style.flexWrap = 'wrap';
     row.innerHTML = `
       <div class="name">${name}</div>
       <div class="pages">${pagesHtml.join('') || '<span class="hint">해당 없음</span>'}</div>
       ${statusBadgeHtml(sub)}
+      ${auto && auto.total>0 ? `<div class="badge ${auto.correct===auto.total?'done':'warn'}">자동채점 ${auto.correct}/${auto.total}</div>` : ''}
       ${sub && sub.submitted ? `<button class="tool-btn" style="flex:0 0 auto;" onclick='enterGradingFromResults(${JSON.stringify(name)})'>✏️ 채점</button>` : ''}
+      ${auto && auto.total>0 ? `<div class="hint" style="flex:1 0 100%;">${Object.keys(auto.detail).sort((a,b)=>a-b).map(no=>no+(auto.detail[no]?'⭕':'❌')).join(' ')}</div>` : ''}
     `;
     gridWrap.appendChild(row);
   });
@@ -866,6 +946,8 @@ let wsStrokes = [];             // 학생 필기(페이지별 stroke 배열) —
 let wsTeacherStrokePages = {};  // 선생님이 채점하며 남긴 필기(투명 PNG, 참고용)
 let wsCurrentPage = 0;
 let submittedFlag = false;
+let wsAnswerKey = [];           // 오늘 학습지의 정답 목록(선생님이 등록, 선택사항)
+let wsAnswers = {};             // 학생이 입력한 답 {문제번호: 값}
 
 let gradingDate = null;
 let gradingStudent = null;
@@ -914,6 +996,71 @@ function loadStrokesFromData(data, pageCount){
   return arr;
 }
 
+/* ---------- 학생: 답안 입력(자동 채점용) ---------- */
+function openAnswerModal(){
+  renderAnswerInputModal();
+  document.getElementById('ansModalBg').classList.add('show');
+}
+function closeAnswerModal(){
+  document.getElementById('ansModalBg').classList.remove('show');
+}
+function renderAnswerInputModal(){
+  const body = document.getElementById('ansModalBody');
+  body.innerHTML = '';
+  wsAnswerKey.forEach(q=>{
+    if(!q || !String(q.answer||'').trim()) return;
+    const cur = wsAnswers[q.no] != null ? String(wsAnswers[q.no]) : '';
+    const row = document.createElement('div');
+    row.style.cssText = 'margin-bottom:16px;';
+    if(q.type==='short'){
+      row.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">${q.no}번</div>`+
+        `<input type="text" style="width:100%;" value="${cur.replace(/"/g,'&quot;')}" oninput="setAnswer(${q.no}, this.value)">`;
+    }else{
+      const n = parseInt(q.choiceCount,10) || 5;
+      let btns = '';
+      for(let i=1;i<=n;i++){
+        const sel = cur === String(i);
+        btns += `<button type="button" class="tool-btn${sel?' on':''}" style="min-width:40px;" onclick="setAnswer(${q.no},'${i}',this)">${i}</button>`;
+      }
+      row.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">${q.no}번</div>`+
+        `<div style="display:flex;gap:6px;flex-wrap:wrap;">${btns}</div>`;
+    }
+    body.appendChild(row);
+  });
+  if(!body.innerHTML) body.innerHTML = '<div class="empty-note">등록된 정답이 없어요.</div>';
+}
+function setAnswer(no, value, btnEl){
+  wsAnswers[no] = value;
+  if(btnEl){
+    Array.from(btnEl.parentElement.children).forEach(b=>b.classList.remove('on'));
+    btnEl.classList.add('on');
+  }
+}
+
+function normalizeAnswerStr(v){
+  return String(v==null?'':v).trim().replace(/\s+/g,'').toLowerCase();
+}
+function answersMatch(correct, given){
+  const nc = normalizeAnswerStr(correct), ng = normalizeAnswerStr(given);
+  if(nc==='') return false;
+  if(nc===ng) return true;
+  const numRe = /^-?\d+(\.\d+)?$/;
+  if(numRe.test(nc) && numRe.test(ng)) return parseFloat(nc)===parseFloat(ng);
+  return false;
+}
+function gradeSubmission(answerKey, studentAnswers){
+  const detail = {};
+  let total=0, correct=0;
+  (answerKey||[]).forEach(q=>{
+    if(!q || !String(q.answer||'').trim()) return;
+    total++;
+    const ok = answersMatch(q.answer, (studentAnswers||{})[q.no]);
+    detail[q.no] = ok;
+    if(ok) correct++;
+  });
+  return {total, correct, detail};
+}
+
 /* ---------- 학생: 학습지 풀기 ---------- */
 async function enterWorksheet(){
   if(!selectedStudent) return;
@@ -927,6 +1074,8 @@ async function enterWorksheet(){
     document.querySelector('.toolbar').style.display = 'none';
     document.getElementById('submitBanner').style.display = 'none';
     document.getElementById('wsPageInd').textContent = '';
+    const answerBtnEmpty = document.getElementById('answerInputBtn');
+    if(answerBtnEmpty) answerBtnEmpty.style.display = 'none';
     return;
   }
   document.querySelector('.toolbar').style.display = 'flex';
@@ -937,6 +1086,7 @@ async function enterWorksheet(){
     '<img id="pageImage" src="" alt="학습지"><img id="refLayerImg" alt="" style="display:none;"><canvas id="drawCanvas"></canvas>';
 
   wsPages = ws.pageUrls;
+  wsAnswerKey = ws.answerKey || [];
 
   const existing = await fsGetDoc('submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent));
   submittedFlag = !!(existing && existing.submitted);
@@ -944,7 +1094,12 @@ async function enterWorksheet(){
     ? loadStrokesFromData(existing.strokeData, wsPages.length)
     : wsPages.map(()=>[]);
   wsTeacherStrokePages = (existing && existing.teacherStrokePages) || {};
+  wsAnswers = (existing && existing.answers) ? {...existing.answers} : {};
   wsCurrentPage = 0;
+
+  const hasAnswerKey = wsAnswerKey.some(q=>q && String(q.answer||'').trim());
+  const answerBtn = document.getElementById('answerInputBtn');
+  if(answerBtn) answerBtn.style.display = hasAnswerKey ? '' : 'none';
 
   drawColor = '#1a1a1a'; eraserOn = false; drawWidth = 6;
   setActiveSwatchUI(drawColor);
@@ -980,6 +1135,8 @@ async function enterGrading(date, student){
   document.getElementById('submitMainBtn').textContent = '💾 채점 저장';
   document.getElementById('board').innerHTML =
     '<img id="pageImage" src="" alt="학습지"><img id="refLayerImg" alt="" style="display:none;"><canvas id="drawCanvas"></canvas>';
+  const answerBtnGrading = document.getElementById('answerInputBtn');
+  if(answerBtnGrading) answerBtnGrading.style.display = 'none';
 
   drawColor = '#e63946'; eraserOn = false; drawWidth = 6; // 채점은 빨간펜 기본
   setActiveSwatchUI(drawColor);
@@ -1352,6 +1509,7 @@ async function submitStudentWork(){
       strokeUrlMap[i] = await uploadDataUrl(path, pngDataUrl);
       strokeDataOut[i] = roundStrokes(wsStrokes[i]);
     }
+    const autoGrade = gradeSubmission(wsAnswerKey, wsAnswers);
     const ok = await fsSetDoc(
       'submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent),
       {
@@ -1361,13 +1519,16 @@ async function submitStudentWork(){
         submitted: true,
         status: 'submitted',
         updatedAt: new Date().toISOString(),
-        student: selectedStudent
+        student: selectedStudent,
+        answers: wsAnswers,
+        autoGrade
       },
       true
     );
     submittedFlag = ok;
+    const gradeNote = autoGrade.total>0 ? ` (자동채점 ${autoGrade.correct}/${autoGrade.total})` : '';
     banner.textContent = ok
-      ? '🎉 제출 완료! 수고했어요, ' + selectedStudent + '!'
+      ? '🎉 제출 완료! 수고했어요, ' + selectedStudent + '!' + gradeNote
       : '제출에 실패했어요. 다시 눌러주세요.';
     banner.classList.toggle('done', ok);
   }catch(err){
