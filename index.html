@@ -840,8 +840,9 @@ async function loadResults(){
 
 function statusBadgeHtml(sub){
   if(!sub || !sub.submitted) return `<div class="badge pending">미제출</div>`;
-  if(sub.status==='needs_revision') return `<div class="badge warn">재제출 필요</div>`;
-  if(sub.status==='confirmed') return `<div class="badge done">확인 완료</div>`;
+  const autoTag = sub.autoGraded ? '자동 ' : '';
+  if(sub.status==='needs_revision') return `<div class="badge warn">${autoTag}재제출 필요</div>`;
+  if(sub.status==='confirmed') return `<div class="badge done">${autoTag}확인 완료</div>`;
   return `<div class="badge wait">채점 대기</div>`;
 }
 
@@ -948,6 +949,7 @@ let wsCurrentPage = 0;
 let submittedFlag = false;
 let wsAnswerKey = [];           // 오늘 학습지의 정답 목록(선생님이 등록, 선택사항)
 let wsAnswers = {};             // 학생이 입력한 답 {문제번호: 값}
+let wsAutoGrade = null;         // 가장 최근 제출의 자동채점 결과 {total, correct, detail:{번호:true/false}}
 
 let gradingDate = null;
 let gradingStudent = null;
@@ -1012,8 +1014,14 @@ function renderAnswerInputModal(){
     const cur = wsAnswers[q.no] != null ? String(wsAnswers[q.no]) : '';
     const row = document.createElement('div');
     row.style.cssText = 'margin-bottom:16px;';
+    let markHtml = '';
+    if(wsAutoGrade && wsAutoGrade.detail && Object.prototype.hasOwnProperty.call(wsAutoGrade.detail, q.no)){
+      markHtml = wsAutoGrade.detail[q.no]
+        ? `<span style="color:var(--success);font-weight:700;margin-left:8px;">⭕ 정답</span>`
+        : `<span style="color:var(--danger);font-weight:700;margin-left:8px;">❌ 오답 (정답: ${q.answer})</span>`;
+    }
     if(q.type==='short'){
-      row.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">${q.no}번</div>`+
+      row.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">${q.no}번${markHtml}</div>`+
         `<input type="text" style="width:100%;" value="${cur.replace(/"/g,'&quot;')}" oninput="setAnswer(${q.no}, this.value)">`;
     }else{
       const n = parseInt(q.choiceCount,10) || 5;
@@ -1022,7 +1030,7 @@ function renderAnswerInputModal(){
         const sel = cur === String(i);
         btns += `<button type="button" class="tool-btn${sel?' on':''}" style="min-width:40px;" onclick="setAnswer(${q.no},'${i}',this)">${i}</button>`;
       }
-      row.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">${q.no}번</div>`+
+      row.innerHTML = `<div style="font-weight:700;margin-bottom:6px;">${q.no}번${markHtml}</div>`+
         `<div style="display:flex;gap:6px;flex-wrap:wrap;">${btns}</div>`;
     }
     body.appendChild(row);
@@ -1095,6 +1103,7 @@ async function enterWorksheet(){
     : wsPages.map(()=>[]);
   wsTeacherStrokePages = (existing && existing.teacherStrokePages) || {};
   wsAnswers = (existing && existing.answers) ? {...existing.answers} : {};
+  wsAutoGrade = (existing && existing.autoGrade) || null;
   wsCurrentPage = 0;
 
   const hasAnswerKey = wsAnswerKey.some(q=>q && String(q.answer||'').trim());
@@ -1425,9 +1434,21 @@ function clearPage(){
 function updateSubmitBanner(existing){
   const b = document.getElementById('submitBanner');
   const status = existing && existing.status;
+  const autoGrade = existing && existing.autoGrade;
   if(!submittedFlag){
     b.textContent = '아직 제출 전이에요. 다 풀면 "제출하기"를 눌러주세요.';
     b.classList.remove('done','warn');
+    return;
+  }
+  if(autoGrade && autoGrade.total>0){
+    const wrongNos = Object.keys(autoGrade.detail).filter(no=>!autoGrade.detail[no]).sort((a,b)=>a-b);
+    if(wrongNos.length===0){
+      b.textContent = `✅ 자동채점 결과 ${autoGrade.correct}/${autoGrade.total}문제 모두 정답! 참 잘했어요!`;
+      b.classList.add('done'); b.classList.remove('warn');
+    }else{
+      b.textContent = `🔁 자동채점 결과 ${autoGrade.correct}/${autoGrade.total}문제 정답이에요. ${wrongNos.join(', ')}번을 다시 확인하고 고쳐서 다시 제출해주세요.`;
+      b.classList.add('warn'); b.classList.remove('done');
+    }
     return;
   }
   if(status==='needs_revision'){
@@ -1437,7 +1458,7 @@ function updateSubmitBanner(existing){
     b.textContent = '✅ 선생님이 확인 완료했어요! 잘했어요.';
     b.classList.add('done'); b.classList.remove('warn');
   }else{
-    b.textContent = '📨 제출 완료! 선생님 확인을 기다리고 있어요. (필요하면 계속 고쳐서 다시 제출해도 돼요)';
+    b.textContent = '📨 제출 완료! 수고했어요' + (selectedStudent?', '+selectedStudent:'') + '! 선생님 확인을 기다리고 있어요. (필요하면 계속 고쳐서 다시 제출해도 돼요)';
     b.classList.remove('done','warn');
   }
 }
@@ -1510,6 +1531,10 @@ async function submitStudentWork(){
       strokeDataOut[i] = roundStrokes(wsStrokes[i]);
     }
     const autoGrade = gradeSubmission(wsAnswerKey, wsAnswers);
+    const autoGraded = autoGrade.total > 0;
+    // 객관식/단답형 정답이 등록돼 있으면 선생님이 손으로 채점할 필요 없이
+    // 문제 번호별 채점 결과에 따라 자동으로 상태를 정한다.
+    const status = autoGraded ? (autoGrade.correct===autoGrade.total ? 'confirmed' : 'needs_revision') : 'submitted';
     const ok = await fsSetDoc(
       'submissions', wsDate+'_'+sanitizeKeyPart(selectedStudent),
       {
@@ -1517,7 +1542,8 @@ async function submitStudentWork(){
         strokeData: strokeDataOut,
         basePages: wsPages,
         submitted: true,
-        status: 'submitted',
+        status,
+        autoGraded,
         updatedAt: new Date().toISOString(),
         student: selectedStudent,
         answers: wsAnswers,
@@ -1526,11 +1552,13 @@ async function submitStudentWork(){
       true
     );
     submittedFlag = ok;
-    const gradeNote = autoGrade.total>0 ? ` (자동채점 ${autoGrade.correct}/${autoGrade.total})` : '';
-    banner.textContent = ok
-      ? '🎉 제출 완료! 수고했어요, ' + selectedStudent + '!' + gradeNote
-      : '제출에 실패했어요. 다시 눌러주세요.';
-    banner.classList.toggle('done', ok);
+    wsAutoGrade = ok ? autoGrade : wsAutoGrade;
+    if(ok){
+      updateSubmitBanner({status, autoGrade});
+    }else{
+      banner.textContent = '제출에 실패했어요. 다시 눌러주세요.';
+      banner.classList.remove('done','warn');
+    }
   }catch(err){
     console.error(err);
     banner.textContent = '제출 중 오류가 발생했어요. 인터넷 연결을 확인하고 다시 눌러주세요.';
@@ -1574,7 +1602,7 @@ async function setGradingStatus(status){
   const banner = document.getElementById('submitBanner');
   const ok = await fsSetDoc(
     'submissions', gradingDate+'_'+sanitizeKeyPart(gradingStudent),
-    {status, teacherUpdatedAt:new Date().toISOString()},
+    {status, autoGraded:false, teacherUpdatedAt:new Date().toISOString()},
     true
   );
   if(!ok){
